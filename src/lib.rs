@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![warn(dead_code)]
+#![allow(dead_code)]
 //! # Readfish-tools
 //!
 //! `readfish-tools` is a collection of utilities to provide a standardised way of analysing
@@ -26,6 +26,7 @@ enum Action {
     StopReceiving,
     Proceed,
 }
+type HashedTargets = HashMap<String, Vec<(usize, usize)>>;
 
 impl From<&str> for Action {
     fn from(source: &str) -> Action {
@@ -244,7 +245,7 @@ impl Targets {
     }
 
     fn insert_into_targets(
-        targets: &mut HashMap<StrandWrapper, HashMap<String, Vec<(usize, usize)>>>,
+        targets: &mut HashMap<StrandWrapper, HashedTargets>,
         record: &CsvRecord,
         strand: Strand,
     ) {
@@ -400,7 +401,7 @@ impl Conf {
         let mut barcodes = Vec::new();
         if let Some(parsed_barcodes) = value.get("barcodes") {
             let parsed_barcodes = parsed_barcodes.as_table().unwrap().iter();
-            for (barcode_key, barcode_value) in parsed_barcodes {
+            for (_, barcode_value) in parsed_barcodes {
                 let x = barcode_value.as_table().unwrap();
                 let z: Barcode = Barcode {
                     condition: x.try_into().unwrap(),
