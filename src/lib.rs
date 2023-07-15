@@ -163,16 +163,23 @@ struct BedRecord {
     strand: String,
 }
 
+/// CSV record parsed from targets specified in TOML file,
+/// If A bed file is provided, the six records are taken and placed in a
+/// BedRecord. This BedRecord is then converted into a CsvRecord.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CsvRecord {
-    contig: String,
+pub struct CsvRecord {
+    /// Contig the target is on
+    pub contig: String,
+    /// Optional start coordinate of target
     #[serde(default)]
-    start: Option<usize>,
+    pub start: Option<usize>,
+    /// Optional stop coordinate of target. Required if start is present
     #[serde(default)]
-    stop: Option<usize>,
+    pub stop: Option<usize>,
+    /// Optional strand target is on. .One of "+"/"-". Required if Start/Stop are provided.
     #[serde(default)]
-    strand: Option<String>,
+    pub strand: Option<String>,
 }
 
 impl From<BedRecord> for CsvRecord {
@@ -187,12 +194,14 @@ impl From<BedRecord> for CsvRecord {
 }
 
 impl CsvRecord {
+    /// Returns true if there were start and stop coordinates including in this CSV records.
     /// Example
     /// ```rust
-    /// let fourtytwo = "42".parse::<u32>()?;
-    /// println!("{} + 10 = {}", fourtytwo, fourtytwo+10);
+    /// # #[macro_use] extern crate readfish_tools;
+    /// let csv: readfish_tools::CsvRecord  = readfish_tools::CsvRecord{contig: "contig".to_string(), start: Some(10), stop: Some(20), strand: Some("+".to_string())};
+    /// assert!(csv.has_coords())
     /// ```
-    fn has_coords(&self) -> bool {
+    pub fn has_coords(&self) -> bool {
         self.start.is_some() & self.stop.is_some()
     }
 
