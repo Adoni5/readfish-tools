@@ -1,0 +1,80 @@
+
+[caller_settings.guppy]
+config = "dna_r10.4.1_e8.2_400bps_hac"
+address = "ipc:///tmp/.guppy/5555"
+debug_log = "live_barcode.fq"
+barcode_kits = "EXP-NBD104"
+
+[mapper_settings.mappy]
+fn_idx_in = "/data/projects/rory_says_hi/icarust_paper_data/Icarust_docker/squiggle_arrs/mixed_ref.fa"
+debug_log = "get_that_barcode.paf"
+
+
+[barcodes.unclassified]
+name = "unclassified_reads"
+control = false
+min_chunks = 0
+max_chunks = 4
+targets = []
+single_on = "unblock"
+multi_on = "unblock"
+single_off = "unblock"
+multi_off = "unblock"
+no_seq = "proceed"
+no_map = "proceed"
+
+[barcodes.classified]
+name = "classified_reads"
+control = false
+min_chunks = 0
+max_chunks = 4
+targets = []
+single_on = "unblock"
+multi_on = "unblock"
+single_off = "unblock"
+multi_off = "unblock"
+no_seq = "proceed"
+no_map = "proceed"
+
+[barcodes.barcode01]
+name = "barcode01"
+control = false
+min_chunks = 0
+max_chunks = 4
+targets = []
+single_on = "unblock"
+multi_on = "unblock"
+single_off = "unblock"
+multi_off = "unblock"
+no_seq = "proceed"
+no_map = "unblock"
+
+[barcodes.barcode02]
+name = "barcode02"
+control = false
+min_chunks = 0
+max_chunks = 4
+targets = []
+single_on = "unblock"
+multi_on = "unblock"
+single_off = "unblock"
+multi_off = "unblock"
+no_seq = "proceed"
+no_map = "unblock"
+
+[barcodes.barcode03]
+name = "barcode03"
+control = false
+min_chunks = 0
+max_chunks = 4
+targets = [
+  "NC_002516.2",
+  "NC_003997.3"
+]
+single_on = "stop_receiving"
+multi_on = "stop_receiving"
+single_off = "unblock"
+multi_off = "unblock"
+no_seq = "proceed"
+no_map = "proceed"
+
