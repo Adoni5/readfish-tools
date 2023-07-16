@@ -425,6 +425,7 @@ impl Conf {
             _channel_map: HashMap::new(),
         }
     }
+    // ToDo check for Unclassified and classified barcodes
 }
 /// Formats the sum of two numbers as string.
 // #[pyfunction]
@@ -459,6 +460,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn read_toml() {
         let test_toml = get_test_file("RAPID_CNS2.toml");
         let toml_content = fs::read_to_string(test_toml).unwrap();
@@ -476,6 +478,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn load_conf() {
         let test_toml = get_test_file("RAPID_CNS2.toml");
         let conf = Conf::new(test_toml);
@@ -534,6 +537,7 @@ mod tests {
     }
 
     #[test]
+
     fn test_get_coord() {
         let targets: Targets = Targets::new(TargetType::Direct(vec![
             "chr1,10,20,+".to_string(),
@@ -579,6 +583,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn load_barcoded_conf() {
         let test_toml = get_test_file("clockface.toml");
         let conf = Conf::new(test_toml);
@@ -606,10 +611,5 @@ mod tests {
                     == (0_usize, usize::MAX)
             )
             .unwrap_or(false))
-    }
-
-    #[test]
-    fn get_channels() {
-        println!("{:#?}", channels::MINION_CHANNELS[&1]);
     }
 }
