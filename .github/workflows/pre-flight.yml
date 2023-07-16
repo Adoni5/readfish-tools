@@ -1,10 +1,6 @@
 name: pre-flight
 on:
   workflow_call:
-    inputs:
-      config-path:
-        required: true
-        type: string
 
 env:
   PYTHON_LATEST: "3.11"
