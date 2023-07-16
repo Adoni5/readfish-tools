@@ -19,6 +19,7 @@ use std::{
 use toml::{map::Map, Table, Value};
 
 mod channels;
+mod nanopore;
 
 #[derive(Debug)]
 enum Action {
