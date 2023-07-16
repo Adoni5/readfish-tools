@@ -14,12 +14,7 @@ concurrency:
 name: rolling
 jobs:
   pre-commit:
-    runs-on: ubuntu-latest
-    name: pre-commit
-    steps:
-      - uses: actions/checkout@v3
-      - name: run pre-commit
-        uses: ./.github/workflows/pre-flight.yml
+    uses: ./.github/workflows/pre-flight.yml
   # https://twitter.com/mycoliza/status/1571295690063753218
   nightly:
     runs-on: ubuntu-latest
