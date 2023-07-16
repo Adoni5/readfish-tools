@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: run pre-commit
-        uses: ./.github/pre-flight/
+        uses: ./.github/workflows/pre-flight.yml
   # https://twitter.com/mycoliza/status/1571295690063753218
   nightly:
     runs-on: ubuntu-latest

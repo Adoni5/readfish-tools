@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: run pre-commit
-        uses: ./.github/pre-flight/
+        uses: ./.github/workflows/pre-flight.yml
   required:
     runs-on: ubuntu-latest
     needs: pre-commit

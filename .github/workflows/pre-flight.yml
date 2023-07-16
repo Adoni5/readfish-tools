@@ -1,11 +1,10 @@
-name: pre-commit
-
+name: pre-flight
 on:
-  push:
-  pull_request:
-  workflow_dispatch:
-  schedule:
-    - cron:  '0 0 * * SUN'
+  workflow_call:
+    inputs:
+      config-path:
+        required: true
+        type: string
 
 env:
   PYTHON_LATEST: "3.11"
