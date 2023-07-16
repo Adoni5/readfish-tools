@@ -11,12 +11,7 @@ concurrency:
 name: test
 jobs:
   pre-commit:
-    runs-on: ubuntu-latest
-    name: pre-commit
-    steps:
-      - uses: actions/checkout@v3
-      - name: run pre-commit
-        uses: ./.github/workflows/pre-flight.yml
+    uses: ./.github/workflows/pre-flight.yml
   required:
     runs-on: ubuntu-latest
     needs: pre-commit
