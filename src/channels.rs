@@ -1,3 +1,8 @@
+//! Channels
+//! Hashmap literals of channel number => row and column on flowcell array.
+//!
+//! Initialised once at runtime.
+
 use lazy_static::lazy_static;
 use maplit::hashmap;
 use std::collections::HashMap;
