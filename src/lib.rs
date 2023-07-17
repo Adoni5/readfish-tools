@@ -341,8 +341,8 @@ impl CsvRecord {
     /// Retrieves the strand information from the struct.
     ///
     /// This function returns an `Option<Strand>` representing the strand information stored in the struct.
-    /// If the `strand` field is `Some`, the function maps the string value to the corresponding `Strand` enum variant
-    /// using the `from` method. If the `strand` field is `None`, the function returns `None`.
+    /// If the `strand` field is [`Some`], the function maps the string value to the corresponding [`Strand`] enum variant
+    /// using the `from` method. If the `strand` field is [`None`], the function returns `None`.
     ///
     /// # Returns
     ///
@@ -409,10 +409,10 @@ struct Targets {
 }
 
 impl Targets {
-    /// Creates a new instance of `Targets` with the provided target data.
+    /// Creates a new instance of [`Targets`] with the provided target data.
     ///
-    /// This function takes the target data in the form of `TargetType` and constructs a new `Targets` struct.
-    /// The `TargetType` can either be an array of strings, representing the targets themselves,
+    /// This function takes the target data in the form of [`TargetType`] and constructs a new [`Targets`] struct.
+    /// The [`TargetType`] can either be an array of strings, representing the targets themselves,
     /// or a string representing a file path to a file containing the targets (.bed or .csv).
     ///
     /// If the targets is an array of strings, they must be im the format "contig, start, stop, strand" OR "contig".
@@ -429,7 +429,7 @@ impl Targets {
     ///
     /// # Arguments
     ///
-    /// * `targets` - The target data in the form of `TargetType`.
+    /// * `targets` - The target data in the form of [`TargetType`].
     ///
     /// # Examples
     ///
@@ -460,7 +460,7 @@ impl Targets {
 
     /// Inserts target coordinates into the `targets` hashmap based on the provided record and strand.
     ///
-    /// This function takes a mutable reference to the `targets` hashmap, a reference to a `CsvRecord`,
+    /// This function takes a mutable reference to the `targets` hashmap, a reference to a [`CsvRecord`],
     /// and a variant from the `strand` Enum. It inserts the record coordinates into a Vec at the lowest level of
     /// the `targets` hashmap based on the strand and contig.
     ///
@@ -468,11 +468,11 @@ impl Targets {
     /// and an empty hashmap is inserted for the contig. If the contig does not exist for the strand,
     /// a new entry is created for the contig, and an empty vector is inserted to store the coordinates.
     ///
-    /// The record coordinates are retrieved using the `get_coords` method from the `CsvRecord` struct.
+    /// The record coordinates are retrieved using the `get_coords()` method from the [`CsvRecord`] struct.
     ///
     /// # Arguments
     ///
-    /// * `targets` - A mutable reference to the `HashMap<StrandWrapper, HashedTargets>` where the record will be inserted.
+    /// * `targets` - A mutable reference to the `HashMap<StrandWrapper, HashedTargets>]` where the record will be inserted.
     /// * `record` - A reference to the `CsvRecord` containing the record information.
     /// * `strand` - The strand information associated with the record.
     ///
@@ -513,24 +513,24 @@ impl Targets {
 
     /// Creates a hashmap of targets from the parsed TOML data.
     ///
-    /// This function takes the `targets` data in the form of `TargetType` and constructs a hashmap of targets
+    /// This function takes the `targets` data in the form of [`TargetType`]] and constructs a hashmap of targets
     /// grouped by strand and contig, with start and stop coordinates as values. The `targets` can be provided
     /// either as a direct array of target strings or as a path to a CSV or BED file containing the targets.
     ///
-    /// If `targets` is of type `TargetType::Direct`, the function treats the data as direct target strings,
+    /// If `targets` is of type [`TargetType::Direct`], the function treats the data as direct target strings,
     /// parses them as CSV data, and populates the hashmap with the targets grouped by strand and contig.
-    /// If `targets` is of type `TargetType::ViaFile`, the function treats the data as a file path,
+    /// If `targets` is of type [`TargetType::ViaFile`], the function treats the data as a file path,
     /// determines the file type (CSV or BED), and parses the data accordingly to populate the hashmap.
     ///
-    /// The function uses the [`CsvRecord`] struct for deserialization of CSV records and the `BedRecord` struct
+    /// The function uses the [`CsvRecord`] struct for deserialization of CSV records and the [`BedRecord`] struct
     /// for deserialization of BED records. The appropriate deserialization is performed based on the file type.
     ///
     /// After populating the hashmap, the function merges overlapping intervals within each contig
-    /// using the `_merge_intervals` helper function.
+    /// using the [`Self::_merge_intervals()`] helper function.
     ///
     /// # Arguments
     ///
-    /// * `targets` - The target data in the form of `TargetType`.
+    /// * `targets` - The target data in the form of [`TargetType`].
     ///
     /// # Returns
     ///
@@ -703,18 +703,18 @@ impl Targets {
     /// given coordinate falls within any of the target intervals by iterating over the intervals and performing
     /// the comparison.
     ///
-    /// The function expects the `strand` argument to implement the `ToString` trait, which allows the function
-    /// to convert it to a `String`. The `strand` is then converted to the [`Strand`] enum type using the `into()`
+    /// The function expects the `strand` argument to implement the [`ToString`] trait, which allows the function
+    /// to convert it to a [`String`]. The `strand` is then converted to the [`Strand`] enum type using the `into()`
     /// method.
     ///
     /// # Generic Parameters
     ///
-    /// * `T` - The type of the `strand` argument that implements the `ToString` trait.
+    /// * `T` - The type of the `strand` argument that implements the [`ToString`] trait.
     ///
     /// # Arguments
     ///
     /// * `contig` - The contig string to lookup the intervals for.
-    /// * `strand` - The strand value to lookup the intervals for. It is expected to be convertible to a `String`.
+    /// * `strand` - The strand value to lookup the intervals for. It is expected to be convertible to a [`String`].
     /// * `coord` - The coordinate value to check against the intervals.
     ///
     /// # Returns
@@ -759,19 +759,19 @@ impl Targets {
 }
 
 impl Conf {
-    /// Constructs a new `Conf` instance by parsing a TOML file.
+    /// Constructs a new [`Conf`] instance by parsing a TOML file.
     ///
-    /// This function takes a TOML file path (`toml_path`) and reads its contents using `std::fs::read_to_string`.
-    /// The TOML content is then parsed into a `Table` using the `parse::<Table>` method. The `Table` represents
+    /// This function takes a TOML file path (`toml_path`) and reads its contents using [`std::fs::read_to_string`].
+    /// The TOML content is then parsed into a `Table` using the `parse::<Table>` method. The [`Table`] represents
     /// the parsed TOML structure.
     ///
     /// The function initializes empty vectors `regions` and `barcodes` to hold the parsed regions and barcodes,
     /// respectively. It then checks if the parsed TOML structure contains the "regions" and "barcodes" sections.
     /// If the sections are present, the function iterates over the corresponding values and converts them into
-    /// `Region` and `Barcode` structs, which are added to the `regions` and `barcodes` vectors, respectively.
+    /// [`Region`] and [`Barcode`] structs, which are added to the `regions` and `barcodes` vectors, respectively.
     ///
-    /// Finally, the function constructs and returns a new `Conf` instance with the populated `regions` and `barcodes`
-    /// vectors. The `channels` field is set to 0, and the `_channel_map` field is initialized as an empty `HashMap`.
+    /// Finally, the function constructs and returns a new [`Conf`] instance with the populated `regions` and `barcodes`
+    /// vectors. The `channels` field is set to 0, and the `_channel_map` field is initialized as an empty [`HashMap].
     ///
     /// # Arguments
     ///
@@ -779,7 +779,7 @@ impl Conf {
     ///
     /// # Returns
     ///
-    /// A new `Conf` instance with the parsed regions and barcodes.
+    /// A new [`Conf`] instance with the parsed regions and barcodes.
     ///
     /// # Panics
     ///
