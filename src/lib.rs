@@ -1088,6 +1088,7 @@ mod tests {
 
     // todo need a barcode and region containing toml
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_get_conditions() {
         let test_toml = get_test_file("RAPID_CNS2.toml");
         let conf = Conf::new(test_toml);
@@ -1108,6 +1109,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_get_region() {
         let test_toml = get_test_file("RAPID_CNS2.toml");
         let conf = Conf::new(test_toml);
