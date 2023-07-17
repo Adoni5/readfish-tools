@@ -13,6 +13,7 @@
 use csv::ReaderBuilder;
 use serde::Deserialize;
 use std::{
+    any::Any,
     collections::HashMap,
     hash::{Hash, Hasher},
     io::Cursor,
@@ -25,7 +26,7 @@ pub mod nanopore;
 
 /// Action types that can be taken once a decision (one of single_off, single_on, multi_off, multi_on, no_map, no_seq, exceeded_max_chunks, below_min_chunks)
 /// has been made.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Action {
     /// Read would be unblocked
     Unblock,
@@ -52,10 +53,12 @@ impl From<&str> for Action {
 
 /// The _Condition struct holds the settings lifted from the TOML file, for each
 /// region of the flowcell or barcode.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct _Condition {
     /// The name of the Condition (Barcode/Region).
     name: String,
+    /// Is this Region/Barcode a control region / Barcode
+    control: bool,
     /// The minimum number of read chunks that have to be captured for a read to be processed. Default if not met is to proceed.
     min_chunks: u8,
     /// The maximum number of read chunks that can be captured for a read. Default if exceed is to unblock.
@@ -76,7 +79,7 @@ struct _Condition {
     no_seq: Action,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 /// Represents a region of the flow cell, denoted in the configuration toml as
 ///
 /// ```toml
@@ -118,10 +121,39 @@ struct Region {
 /// ```
 ///
 /// All the parsed fields are stored with a _Condition struct, as they could also be from a regions table.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Barcode {
     /// The parsed barcode settings.
     condition: _Condition,
+}
+
+// Define a trait to represent the common behaviour of Region and Barcode
+/// Trait for shared behavour for Barcodes and Regions
+trait Condition {
+    // Add any common methods or behavior for Region or Barcode
+    /// Return whether this Condition is a control
+    fn control(&self) -> bool;
+    /// Implement a method that returns something with the Any trait - which allows downcasting of Barcodes and Regions.
+    fn any(&self) -> &dyn Any;
+}
+
+impl Condition for Region {
+    fn control(&self) -> bool {
+        self.condition.control
+    }
+
+    fn any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Condition for Barcode {
+    fn control(&self) -> bool {
+        self.condition.control
+    }
+    fn any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl From<&Map<String, Value>> for _Condition {
@@ -130,6 +162,11 @@ impl From<&Map<String, Value>> for _Condition {
         let target: Targets = Targets::new(targets);
         _Condition {
             name: source.get("name").unwrap().as_str().unwrap().to_string(),
+            control: source
+                .get("control")
+                .unwrap_or(&toml::Value::Boolean(true))
+                .as_bool()
+                .unwrap(),
             min_chunks: source
                 .get("min_chunks")
                 .unwrap_or(&toml::Value::Integer(0))
@@ -212,7 +249,7 @@ impl AsRef<str> for Strand {
 }
 /// TargetRype Enum, represents whther targets were listed directly in the TOML file
 /// or a path to a targets containing file was given.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum TargetType {
     /// Variant representing targets that were given directly in the TOML file.
     Direct(Vec<String>),
@@ -393,11 +430,11 @@ struct Conf {
     /// The regions of the flowcell. contains the name of the region and the Action to take for each Alignment type.
     regions: Vec<Region>,
     /// The barcodes from the sequencing library.
-    barcodes: Vec<Barcode>,
+    barcodes: HashMap<String, Barcode>,
     /// The mapping of channel number to the index of the region that channel belongs to.
-    _channel_map: HashMap<u16, u8>,
+    _channel_map: HashMap<usize, usize>,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 /// Holds the targets for a given region or barcode.
 struct Targets {
     /// The target string as listed in the Toml. Can either be an array of strings, in which case that is assumed to be the targets themselves, or a string,
@@ -809,25 +846,212 @@ impl Conf {
             }
         }
 
-        let mut barcodes = Vec::new();
+        let mut barcodes = HashMap::new();
         if let Some(parsed_barcodes) = value.get("barcodes") {
             let parsed_barcodes = parsed_barcodes.as_table().unwrap().iter();
-            for (_, barcode_value) in parsed_barcodes {
-                let x = barcode_value.as_table().unwrap();
-                let z: Barcode = Barcode {
-                    condition: x.try_into().unwrap(),
+            for (barcode_name, barcode_value) in parsed_barcodes {
+                let barcode_table = barcode_value.as_table().unwrap();
+                let barcode_struct: Barcode = Barcode {
+                    condition: barcode_table.try_into().unwrap(),
                 };
-                barcodes.push(z);
+                barcodes.insert(barcode_name.clone(), barcode_struct);
             }
         }
-        Conf {
+        let mut conf = Conf {
             channels: 0,
             regions,
             barcodes,
             _channel_map: HashMap::new(),
+        };
+        conf.validate_post_init().unwrap();
+        conf.generate_channel_map(512).unwrap();
+        conf
+    }
+
+    /// Validates the state of the [`Conf`] struct after initialization.
+    ///
+    /// This function checks if the [`Conf`] struct contains `regions`, and if not that the Barcodes has
+    /// the required 'unclassified' or 'clasiffied' `barcodes` conditions.
+    /// and returns a [`Result`] indicating whether the validation passed or failed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Err`] variant with a descriptive error message if the validation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust, ignore
+    ///     let conf = Conf::new("config.toml");
+    ///     conf.validate_post_init().unwrap();
+    /// ```
+    /// # Returns
+    ///
+    /// - [`Ok(())`] if the validation passes and the `Conf` struct is in a valid state.
+    /// - [`Err`] with a descriptive error message if the validation fails.
+    fn validate_post_init(&self) -> Result<(), String> {
+        let required_barcodes = ["unclassified", "classified"];
+        if self.regions.is_empty()
+            && !required_barcodes
+                .iter()
+                .all(|&required_barcode| self.barcodes.contains_key(required_barcode))
+        {
+            Err("This TOML configuration does not contain any `regions` or `barcodes` and cannot be used by readfish".to_string())
+        } else {
+            Ok(())
         }
     }
-    // ToDo check for Unclassified and classified barcodes
+
+    /// Generates a channel map based on the given number of channels and regions.
+    ///
+    /// This method splits the channels evenly among the regions and assigns each channel
+    /// a corresponding region index, linking to the position of the region in `Conf.regions`.
+    ///
+    /// # Arguments
+    ///
+    /// * `channels` - The total number of channels.
+    /// * `regions` - A slice of regions to distribute the channels among.
+    ///
+    /// # Returns
+    ///
+    /// A `HashMap<usize, usize>` representing the channel map, where the keys are the
+    /// channel numbers and the values are the positions of the channels within the regions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::collections::HashMap;
+    /// # struct Region {}
+    /// # fn generate_flowcell(flowcell_size: usize, split: usize, axis: usize, odd_even: bool) -> Vec<Vec<usize>> { vec![vec![1, 2, 3], vec![4, 5, 6]] }
+    /// #
+    /// # fn generate_channel_map(channels: usize, regions: &[Region]) -> HashMap<usize, usize> {
+    /// #     let split_channels = generate_flowcell(channels, regions.len().max(1), 0, false);
+    /// #     let mut channel_map = HashMap::new();
+    /// #
+    /// #     for (pos, (channels, region)) in split_channels.iter().zip(regions.iter()).enumerate() {
+    /// #         for &channel in channels.iter() {
+    /// #             channel_map.insert(channel, pos);
+    /// #         }
+    /// #     }
+    /// #
+    /// #     channel_map
+    /// # }
+    /// let regions = vec![
+    ///     Region {},
+    ///     Region {},
+    /// ];
+    ///
+    ///
+    /// let channel_map = generate_channel_map(6, &regions);
+    /// // If we split our imaginary 6 channel flowcell into 2 regions.
+    /// // NB This would panic in reality - as generate flowcell would not recognise 6 as a valid flow cell size.
+    /// assert_eq!(channel_map.get(&1), Some(&0));
+    /// assert_eq!(channel_map.get(&2), Some(&0));
+    /// assert_eq!(channel_map.get(&3), Some(&0));
+    /// assert_eq!(channel_map.get(&4), Some(&1));
+    /// assert_eq!(channel_map.get(&5), Some(&1));
+    /// assert_eq!(channel_map.get(&6), Some(&1));
+    /// assert_eq!(channel_map.get(&7), None);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if the `channels` parameter is zero.
+    fn generate_channel_map(&mut self, channels: usize) -> Result<(), String> {
+        let split_channels =
+            nanopore::generate_flowcell(channels, self.regions.len().max(1), 1, false);
+        let mut channel_map = HashMap::new();
+
+        for (pos, (channels, _region)) in split_channels.iter().zip(self.regions.iter()).enumerate()
+        {
+            for &channel in channels.iter() {
+                channel_map.insert(channel, pos);
+            }
+        }
+        self._channel_map = channel_map;
+        Ok(())
+    }
+
+    /// Get the condition for a given channel or barcode from the Conf TOML
+    ///
+    /// The barcode should be passed as an optional `&str` parameter. If barcoding
+    /// is not being done and the barcode is not provided, the `channel` will be used instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel` - The channel number for the result
+    /// * `barcode` - Optional barcode classification from basecalling
+    ///
+    /// # Returns
+    ///
+    /// * `Ok` - A tuple `(bool, &dyn Condition)` representing the control flag and the condition
+    /// * `Err` - A `String` containing an error message if the channel/barcode combination does not find a `Region` or a `Barcode`
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if both the region (channel) and barcode were not found in the configuration.
+    ///
+    fn get_conditions(
+        &self,
+        channel: usize,
+        barcode: Option<&str>,
+    ) -> Result<(bool, &dyn Condition), String> {
+        let region_ = self.get_region(channel);
+        let barcode_ = self.get_barcode(barcode);
+
+        if let (Some(region), Some(barcode)) = (region_, barcode_) {
+            let control = region.control() || barcode.control();
+            Ok((control, barcode))
+        } else if let Some(region) = region_ {
+            let control = region.control();
+            Ok((control, region))
+        } else if let Some(barcode) = barcode_ {
+            let control = barcode.control();
+            Ok((control, barcode))
+        } else {
+            Err(format!(
+                "Both region (channel={}) and barcode ({:?}) were not found. This config is invalid!",
+                channel, barcode
+            ))
+        }
+    }
+
+    /// Get the region for a given channel.
+    ///
+    /// Parameters:
+    /// - `channel`: The channel number.
+    ///
+    /// Returns:
+    /// - Returns an [`Option`] containing a reference to the [`Region`] if a region exists for the given channel,
+    ///   otherwise returns [`None`].
+    fn get_region(&self, channel: usize) -> Option<&Region> {
+        if let Some(channel_index) = self._channel_map.get(&channel) {
+            self.regions.get(*channel_index)
+        } else {
+            None
+        }
+    }
+
+    /// Get the barcode condition for a given barcode name.
+    ///
+    /// Parameters:
+    /// - `barcode`: The name of the barcode, example "barcode01".
+    ///
+    /// Returns:
+    /// - Returns an [`Option`] containing a reference to the [`Barcode`] if a barcode exists for the given name,
+    ///   otherwise returns [`None`]. If the `barcode` parameter is [`None`], function returns [`None`].
+    fn get_barcode(&self, barcode: Option<&str>) -> Option<&Barcode> {
+        if let Some(barcode_name) = barcode {
+            if !self.barcodes.is_empty() {
+                self.barcodes
+                    .get(barcode_name)
+                    .or_else(|| self.barcodes.get("classified"))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 /// Formats the sum of two numbers as string.
 // #[pyfunction]
@@ -843,6 +1067,7 @@ impl Conf {
 #[cfg(test)]
 mod tests {
     // BEdfile, with not 6 rows, bedfile with wrong types, csv with wrong types, csv with more than 4 rws
+    // ToDo write from str method onto Conf so we can test the miri stuff without opening TOML files
     use toml::{Table, Value};
 
     use super::*;
@@ -859,6 +1084,86 @@ mod tests {
         let mut path = get_resource_dir();
         path.push(file);
         path
+    }
+
+    // todo need a barcode and region containing toml
+    #[test]
+    fn test_get_conditions() {
+        let test_toml = get_test_file("RAPID_CNS2.toml");
+        let conf = Conf::new(test_toml);
+        let (_control, x) = conf.get_conditions(10, None).unwrap();
+        // Convert the `Box<dyn Condition>` back into a `Region` if it is one
+        if let Some(region) = x.any().downcast_ref::<Region>() {
+            // Use the `Region` here
+            println!("It's a Region: {:?}", region);
+        } else if let Some(barcode) = x.any().downcast_ref::<Barcode>() {
+            // Convert the `Box<dyn Condition>` back into a `Barcode` if it is one
+            // Use the `Barcode` here
+            println!("It's a Barcode: {:?}", barcode);
+        } else {
+            println!("It's neither a Region nor a Barcode");
+        }
+
+        // println!("{x:#?}")
+    }
+
+    #[test]
+    fn test_get_region() {
+        let test_toml = get_test_file("RAPID_CNS2.toml");
+        let conf = Conf::new(test_toml);
+        let region = conf.get_region(1).unwrap();
+        assert_eq!(region.condition.name, "Direct_CNS");
+        let region = conf.get_region(128).unwrap();
+        assert_eq!(region.condition.name, "Rapid_CNS")
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_get_regions_no_regions() {
+        let test_toml = get_test_file("clockface.toml");
+        let conf = Conf::new(test_toml);
+        let region = conf.get_region(1);
+        assert_eq!(region, None);
+        let region = conf.get_region(128);
+        assert_eq!(region, None)
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_generate_channel_map() {
+        let test_toml = get_test_file("RAPID_CNS2.toml");
+        let mut conf = Conf::new(test_toml);
+        conf.generate_channel_map(512).unwrap();
+        assert_eq!(conf._channel_map.get(&121).unwrap(), &0_usize);
+        assert_eq!(conf._channel_map.get(&12).unwrap(), &1_usize);
+    }
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_generate_channel_map_barcode() {
+        let test_toml = get_test_file("clockface.toml");
+        let mut conf = Conf::new(test_toml);
+        conf.generate_channel_map(512).unwrap();
+        assert_eq!(conf._channel_map.get(&121), None);
+        assert_eq!(conf._channel_map.get(&12), None);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_conf_validate_post_init() {
+        let test_toml = get_test_file("clockface.toml");
+        let conf = Conf::new(test_toml);
+        conf.validate_post_init().unwrap();
+    }
+
+    // Now try without the unclassified barcode condition
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    #[should_panic]
+    fn test_conf_validate_post_init_panic() {
+        let test_toml = get_test_file("clockface.toml");
+        let mut conf = Conf::new(test_toml);
+        conf.barcodes.remove("unclassified");
+        conf.validate_post_init().unwrap();
     }
 
     #[test]
@@ -1045,24 +1350,21 @@ mod tests {
         let test_toml = get_test_file("clockface.toml");
         let conf = Conf::new(test_toml);
         assert!(conf.regions.is_empty());
+        assert_eq!(
+            conf.barcodes.get("barcode01").unwrap().condition.name,
+            "barcode01"
+        );
+        assert_eq!(
+            conf.barcodes.get("barcode02").unwrap().condition.name,
+            "barcode02"
+        );
+        assert_eq!(
+            conf.barcodes.get("barcode03").unwrap().condition.name,
+            "barcode03"
+        );
         assert!(conf
             .barcodes
-            .get(0)
-            .map(|x| x.condition.name == "barcode01")
-            .unwrap_or(false));
-        assert!(conf
-            .barcodes
-            .get(1)
-            .map(|x| x.condition.name == "barcode02")
-            .unwrap_or(false));
-        assert!(conf
-            .barcodes
-            .get(2)
-            .map(|x| x.condition.name == "barcode03")
-            .unwrap_or(false));
-        assert!(conf
-            .barcodes
-            .get(2)
+            .get("barcode03")
             .map(
                 |x| x.condition.targets._targets[&StrandWrapper(Strand::Reverse)]["NC_002516.2"][0]
                     == (0_usize, usize::MAX)
