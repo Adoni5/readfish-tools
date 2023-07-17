@@ -2,6 +2,8 @@
 name = "readfish-tools"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/adoni5/readfish-tools/"
+keywords = ["genomics", "analysis", "nanopore", "adaptive_sampling"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
