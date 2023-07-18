@@ -176,7 +176,7 @@ impl From<&Map<String, Value>> for _Condition {
                 .unwrap(),
 
             max_chunks: source
-                .get("min_chunks")
+                .get("max_chunks")
                 .unwrap_or(&toml::Value::Integer(4))
                 .as_integer()
                 .unwrap()
@@ -796,9 +796,83 @@ impl Targets {
 }
 
 impl Conf {
+    /// Creates a [`Conf`] instance from a TOML string.
+    ///
+    /// This function parses the TOML string and constructs a `Conf` struct
+    /// using the parsed data. It returns the constructed `Conf` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `toml_string` - The TOML string to parse and create the `Conf` from.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let toml_str = r#"
+    ///     channels = 10
+    ///
+    ///     [regions]
+    ///     [[regions.condition]]
+    ///     name = "Region 1"
+    ///     min_chunks = 2
+    ///     max_chunks = 5
+    ///     # ...
+    ///
+    ///     [barcodes]
+    ///     [[barcodes.condition]]
+    ///     name = "Barcode 1"
+    ///     min_chunks = 1
+    ///     max_chunks = 3
+    ///     # ...
+    /// "#;
+    ///
+    /// let conf = Conf::from_string(toml_str);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// This function panics if the TOML string fails to parse or if there
+    /// are any invalid values in the TOML data.
+    ///
+    /// # Returns
+    ///
+    /// The constructed `Conf` instance.
+    ///
+    fn from_string(toml_string: &str) -> Conf {
+        Conf::new(toml_string)
+    }
+
     /// Constructs a new [`Conf`] instance by parsing a TOML file.
     ///
-    /// This function takes a TOML file path (`toml_path`) and reads its contents using [`std::fs::read_to_string`].
+    /// This function takes a TOML file path (`toml_path`) and reads its contents
+    /// using [`std::fs::read_to_string`]. The contents of the TOML file are then
+    /// passed to the `Conf::new` function to create a new `Conf` instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `toml_path` - The path to the TOML file to be parsed.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if the TOML file cannot be read or if parsing the TOML
+    /// content into a `Conf` instance fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use std::path::Path;
+    ///
+    /// let toml_path = Path::new("config.toml");
+    /// let conf = Conf::from_file(toml_path);
+    /// ```
+    fn from_file(toml_path: impl AsRef<Path>) -> Conf {
+        let toml_content = std::fs::read_to_string(toml_path).unwrap();
+        Conf::new(&toml_content)
+    }
+
+    /// Constructs a new [`Conf`] instance by parsing a String representation of TOML file.
+    ///
+    /// This function takes a String representation of a toml file (`toml_content`).
     /// The TOML content is then parsed into a `Table` using the `parse::<Table>` method. The [`Table`] represents
     /// the parsed TOML structure.
     ///
@@ -831,8 +905,7 @@ impl Conf {
     ///
     /// // Perform operations on the `conf` instance
     /// ```
-    fn new(toml_path: impl AsRef<Path>) -> Conf {
-        let toml_content = std::fs::read_to_string(toml_path).unwrap();
+    fn new(toml_content: &str) -> Conf {
         let value = toml_content.parse::<Table>().unwrap();
         let mut regions = Vec::new();
         if let Some(parsed_regions) = value.get("regions") {
@@ -1086,12 +1159,147 @@ mod tests {
         path
     }
 
+    fn test_toml_string() -> &'static str {
+        r#"
+        [[regions]]
+        name = "Rapid_CNS"
+        min_chunks = 1
+        max_chunks = 4
+        targets = "resources/panel_adaptive_nogenenames_20122021_hg38.bed"
+        single_off = "unblock"
+        multi_off = "unblock"
+        single_on = "stop_receiving"
+        multi_on = "stop_receiving"
+        no_seq = "proceed"
+        no_map = "proceed"
+
+
+        [[regions]]
+        name = "Direct_CNS"
+        min_chunks = 1
+        max_chunks = 4
+        targets = ["chr2,3001,4000,-", "chr2,3000,4000,-", "chr20,3000,4000,-"]
+        single_off = "unblock"
+        multi_off = "unblock"
+        single_on = "stop_receiving"
+        multi_on = "stop_receiving"
+        no_seq = "proceed"
+        no_map = "proceed""#
+    }
+
+    fn test_barcoded_toml_string() -> &'static str {
+        r#"
+        [barcodes.unclassified]
+        name = "unclassified_reads"
+        control = false
+        min_chunks = 0
+        max_chunks = 4
+        targets = []
+        single_on = "unblock"
+        multi_on = "unblock"
+        single_off = "unblock"
+        multi_off = "unblock"
+        no_seq = "proceed"
+        no_map = "proceed"
+
+        [barcodes.classified]
+        name = "classified_reads"
+        control = false
+        min_chunks = 0
+        max_chunks = 4
+        targets = []
+        single_on = "unblock"
+        multi_on = "unblock"
+        single_off = "unblock"
+        multi_off = "unblock"
+        no_seq = "proceed"
+        no_map = "proceed"
+
+        [barcodes.barcode01]
+        name = "barcode01"
+        control = false
+        min_chunks = 0
+        max_chunks = 4
+        targets = []
+        single_on = "unblock"
+        multi_on = "unblock"
+        single_off = "unblock"
+        multi_off = "unblock"
+        no_seq = "proceed"
+        no_map = "unblock"
+
+        [barcodes.barcode02]
+        name = "barcode02"
+        control = false
+        min_chunks = 0
+        max_chunks = 4
+        targets = []
+        single_on = "unblock"
+        multi_on = "unblock"
+        single_off = "unblock"
+        multi_off = "unblock"
+        no_seq = "proceed"
+        no_map = "unblock"
+
+        [barcodes.barcode03]
+        name = "barcode03"
+        control = false
+        min_chunks = 0
+        max_chunks = 4
+        targets = [
+          "NC_002516.2",
+          "NC_003997.3"
+        ]
+        single_on = "stop_receiving"
+        multi_on = "stop_receiving"
+        single_off = "unblock"
+        multi_off = "unblock"
+        no_seq = "proceed"
+        no_map = "proceed""#
+    }
+
+    #[test]
+    fn test_from_string() {
+        let toml_str = r#"
+            [[regions]]
+            name = "Rapid_CNS"
+            min_chunks = 1
+            max_chunks = 4
+            targets = "resources/panel_adaptive_nogenenames_20122021_hg38.bed"
+            single_off = "unblock"
+            multi_off = "unblock"
+            single_on = "stop_receiving"
+            multi_on = "stop_receiving"
+            no_seq = "proceed"
+            no_map = "proceed"
+        "#;
+
+        let conf = Conf::from_string(toml_str);
+
+        // Assert that the Conf instance is constructed correctly
+        assert_eq!(conf.regions.len(), 1);
+
+        let region = &conf.regions[0];
+        assert_eq!(region.condition.name, "Rapid_CNS");
+        assert_eq!(region.condition.min_chunks, 1);
+        assert_eq!(region.condition.max_chunks, 4);
+        assert_eq!(
+            region.condition.targets.value,
+            TargetType::ViaFile("resources/panel_adaptive_nogenenames_20122021_hg38.bed".into())
+        );
+        assert_eq!(region.condition.single_off, "unblock".into());
+        assert_eq!(region.condition.multi_off, "unblock".into());
+        assert_eq!(region.condition.single_on, "stop_receiving".into());
+        assert_eq!(region.condition.multi_on, "stop_receiving".into());
+        assert_eq!(region.condition.no_seq, "proceed".into());
+        assert_eq!(region.condition.no_map, "proceed".into());
+    }
+
     // todo need a barcode and region containing toml
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_get_conditions() {
-        let test_toml = get_test_file("RAPID_CNS2.toml");
-        let conf = Conf::new(test_toml);
+        let test_toml = test_toml_string();
+        let conf = Conf::from_string(test_toml);
         let (_control, x) = conf.get_conditions(10, None).unwrap();
         // Convert the `Box<dyn Condition>` back into a `Region` if it is one
         if let Some(region) = x.any().downcast_ref::<Region>() {
@@ -1104,15 +1312,12 @@ mod tests {
         } else {
             println!("It's neither a Region nor a Barcode");
         }
-
-        // println!("{x:#?}")
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_get_region() {
-        let test_toml = get_test_file("RAPID_CNS2.toml");
-        let conf = Conf::new(test_toml);
+        let test_toml = test_toml_string();
+        let conf = Conf::from_string(test_toml);
         let region = conf.get_region(1).unwrap();
         assert_eq!(region.condition.name, "Direct_CNS");
         let region = conf.get_region(128).unwrap();
@@ -1120,10 +1325,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_get_regions_no_regions() {
-        let test_toml = get_test_file("clockface.toml");
-        let conf = Conf::new(test_toml);
+        let test_toml = test_barcoded_toml_string();
+        let conf = Conf::from_string(test_toml);
         let region = conf.get_region(1);
         assert_eq!(region, None);
         let region = conf.get_region(128);
@@ -1131,39 +1335,36 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_generate_channel_map() {
-        let test_toml = get_test_file("RAPID_CNS2.toml");
-        let mut conf = Conf::new(test_toml);
+        let test_toml = test_toml_string();
+        let mut conf = Conf::from_string(test_toml);
         conf.generate_channel_map(512).unwrap();
         assert_eq!(conf._channel_map.get(&121).unwrap(), &0_usize);
         assert_eq!(conf._channel_map.get(&12).unwrap(), &1_usize);
     }
+
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_generate_channel_map_barcode() {
-        let test_toml = get_test_file("clockface.toml");
-        let mut conf = Conf::new(test_toml);
+        let test_toml = test_barcoded_toml_string();
+        let mut conf = Conf::from_string(test_toml);
         conf.generate_channel_map(512).unwrap();
         assert_eq!(conf._channel_map.get(&121), None);
         assert_eq!(conf._channel_map.get(&12), None);
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_conf_validate_post_init() {
-        let test_toml = get_test_file("clockface.toml");
-        let conf = Conf::new(test_toml);
+        let test_toml = test_barcoded_toml_string();
+        let conf = Conf::from_string(test_toml);
         conf.validate_post_init().unwrap();
     }
 
     // Now try without the unclassified barcode condition
     #[test]
-    #[cfg_attr(miri, ignore)]
     #[should_panic]
     fn test_conf_validate_post_init_panic() {
-        let test_toml = get_test_file("clockface.toml");
-        let mut conf = Conf::new(test_toml);
+        let test_toml = test_barcoded_toml_string();
+        let mut conf = Conf::from_string(test_toml);
         conf.barcodes.remove("unclassified");
         conf.validate_post_init().unwrap();
     }
@@ -1245,7 +1446,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn test_load_conf() {
         let test_toml = get_test_file("RAPID_CNS2.toml");
-        let conf = Conf::new(test_toml);
+        let conf = Conf::from_file(test_toml);
         assert!(conf
             .regions
             .get(0)
@@ -1301,7 +1502,6 @@ mod tests {
     }
 
     #[test]
-
     fn test_get_coord() {
         let targets: Targets = Targets::new(TargetType::Direct(vec![
             "chr1,10,20,+".to_string(),
@@ -1348,9 +1548,9 @@ mod tests {
 
     #[test]
     #[cfg_attr(miri, ignore)]
-    fn load_barcoded_conf() {
+    fn test_load_barcoded_conf() {
         let test_toml = get_test_file("clockface.toml");
-        let conf = Conf::new(test_toml);
+        let conf = Conf::from_file(test_toml);
         assert!(conf.regions.is_empty());
         assert_eq!(
             conf.barcodes.get("barcode01").unwrap().condition.name,
