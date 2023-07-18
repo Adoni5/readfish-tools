@@ -20,7 +20,7 @@ jobs:
     needs: pre-commit
     strategy:
       matrix:
-        msrv: ["1.61.0", "1.62.0"]
+        msrv: ["1.64.0", "1.65.0"]
     name: "ubuntu / ${{ matrix.msrv }}"
     steps:
       - uses: "actions/checkout@v3"
