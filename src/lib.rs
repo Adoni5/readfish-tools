@@ -23,6 +23,7 @@ use toml::{map::Map, Table, Value};
 
 mod channels;
 pub mod nanopore;
+mod paf;
 
 /// Action types that can be taken once a decision (one of single_off, single_on, multi_off, multi_on, no_map, no_seq, exceeded_max_chunks, below_min_chunks)
 /// has been made.
