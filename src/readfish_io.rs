@@ -529,8 +529,9 @@ mod tests {
         let mut reader = reader(get_test_file("test_hum_4000.paf"), Some(36));
         let mut line = String::new();
         let _line_read = reader.read_line(&mut line).unwrap();
-        assert_eq!(line.len(), 121);
-        assert_eq!(line, "\t635\t36\t632\t+\tNC_000007.14\t159345973\t115197340\t115197933\t453\t597\t60\ttp:A:P\tcm:i:66\ts1:i:452\ts2:i:63\tdv:f:0.0219\trl:i:138\n");
+        let line = line.trim();
+        assert_eq!(line.len(), 120);
+        assert_eq!(line, "\t635\t36\t632\t+\tNC_000007.14\t159345973\t115197340\t115197933\t453\t597\t60\ttp:A:P\tcm:i:66\ts1:i:452\ts2:i:63\tdv:f:0.0219\trl:i:138");
     }
 
     #[test]
@@ -540,6 +541,8 @@ mod tests {
         let mut reader = reader(get_test_file("test_hum_4000.paf.gz"), Some(36));
         let mut line = String::new();
         let _line_read = reader.read_line(&mut line).unwrap();
-        println!("Line: {}", line);
+        let line = line.trim();
+        assert_eq!(line.len(), 120);
+        assert_eq!(line, "\t635\t36\t632\t+\tNC_000007.14\t159345973\t115197340\t115197933\t453\t597\t60\ttp:A:P\tcm:i:66\ts1:i:452\ts2:i:63\tdv:f:0.0219\trl:i:138");
     }
 }
