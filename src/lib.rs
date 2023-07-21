@@ -62,9 +62,9 @@ pub struct Summary {
     pub name: String,
     /// The total number of reads in the sequencing data.
     pub total_reads: u64,
-    /// The count of reads that are mapped off the target region (off-target reads).
+    /// The count of reads that are mapped off the target regions (off-target reads).
     pub off_target_read_count: u64,
-    /// The count of reads that are mapped on the target region (on-target reads).
+    /// The count of reads that are mapped to the target regions (on-target reads).
     pub on_target_read_count: u64,
     /// The percentage of off-target reads in the sequencing data.
     pub off_target_percent: f64,
