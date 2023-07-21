@@ -70,3 +70,6 @@ docs/_build/
 
 # Pyenv
 .python-version
+header.txt
+sequencing_summary_PAK09329_1e424e0e.txt
+seq_sum_PAK09329_truncated.txt
