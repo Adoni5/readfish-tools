@@ -182,9 +182,7 @@ impl Paf {
                     seq_sum_record, query_name
                 );
             }
-            if previous_read_id.is_empty() {
-                previous_read_id = query_name.to_string();
-            }
+            previous_read_id = query_name.to_string();
         }
         Ok(())
     }
