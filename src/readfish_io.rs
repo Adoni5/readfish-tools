@@ -512,6 +512,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_reader() {
         let n_lines = reader(get_test_file("test_hum_4000.paf"), None)
             .lines()
@@ -533,6 +534,8 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
+
     fn test_reader_seek_gz() {
         let mut reader = reader(get_test_file("test_hum_4000.paf.gz"), Some(36));
         let mut line = String::new();
