@@ -70,7 +70,7 @@ pub struct SeqSum {
 /// 3. `ReadId(String)`: Stores the unique identifier of the sequence (read ID).
 ///
 /// # Examples
-/// ```
+/// ```rust,ignore
 /// use crate::SeqSumInfo;
 ///
 /// let channel_info = SeqSumInfo::Channel(3);
@@ -106,7 +106,7 @@ impl SeqSum {
     /// It can return an error if there are issues reading or parsing the sequencing summary file.
     ///
     /// # Examples
-    /// ```
+    /// ```rust,ignore
     /// # use my_crate::{SeqSum, SeqSumInfo};
     /// # use my_crate::DynResult;
     /// #

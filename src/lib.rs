@@ -31,8 +31,8 @@ use std::path::Path;
 ///
 /// This function takes two file paths as inputs, `toml_path` and `paf_path`, representing
 /// the paths to the TOML configuration file and the PAF file, respectively. The TOML configuration
-/// is read using the `readfish::Conf::from_file` function, and the PAF file is parsed using the
-/// `paf::parse_paf_file` function. The resulting PAF records are then demultiplexed based on the
+/// is read using the `readfish::Conf::from_file` function, and the PAF file is opened and checked using the
+/// `paf::open_paf_for_reading` function. The resulting PAF records are then demultiplexed based on the
 /// information provided in the configuration file.
 ///
 /// Note: The current implementation initializes a new `paf::Paf` object with a hardcoded PAF file

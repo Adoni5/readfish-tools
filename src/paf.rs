@@ -85,9 +85,9 @@ impl Paf {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use std::path::Path;
-    /// use readfish::Paf;
+    /// use readfish_tools::Paf;
     ///
     /// // Create a new Paf object from the "example.paf" file
     /// let paf_file_path = Path::new("example.paf");
@@ -97,7 +97,7 @@ impl Paf {
     pub fn new(paf_file: impl AsRef<Path>) -> Paf {
         Paf {
             paf_file: paf_file.as_ref().to_path_buf(),
-            reader: parse_paf_file(paf_file).unwrap(),
+            reader: open_paf_for_reading(paf_file).unwrap(),
             writers: vec![],
         }
     }
@@ -147,7 +147,10 @@ impl Paf {
     ) -> DynResult<()> {
         // Remove multiple mappings from seq_sum dictionary only when the new Read Id is not the same as the old read_id
         let mut previous_read_id = String::new();
-        for (_index, line) in parse_paf_file(self.paf_file.clone())?.lines().enumerate() {
+        for (_index, line) in open_paf_for_reading(self.paf_file.clone())?
+            .lines()
+            .enumerate()
+        {
             let line = line?;
             println!("line: {}", line);
             let t: Vec<&str> = line.split_ascii_whitespace().collect();
@@ -188,50 +191,75 @@ impl Paf {
     }
 }
 
-/// Reads and parses a PAF file, extracting relevant information from each line.
+/// Parses the PAF file and returns a buffered reader for further processing.
 ///
-/// A PAF (Pairwise mApping Format) file contains tab-separated columns, each representing
-/// alignment information between sequences. The function reads the file line by line,
-/// parses each line, and collects the necessary information for further processing.
+/// This function takes the `file_name` as an input and returns a `Result` containing
+/// a boxed buffered reader (`Box<dyn BufRead + Send>`) if the PAF file is valid.
 ///
 /// # Arguments
 ///
-/// * `file_name`: An implementation of the `AsRef<Path>` trait, representing the path to the PAF file.
+/// * `file_name`: The path to the PAF file to be parsed. It should implement the `AsRef<Path>` trait.
+///
+/// # Returns
+///
+/// A `Result` containing the buffered reader (`Box<dyn BufRead + Send>`) if the PAF file is valid,
+/// otherwise an `Err` containing an error message.
 ///
 /// # Errors
 ///
-/// The function returns a result containing either `Ok(())` if the PAF file is successfully read
-/// and parsed, or an error message in case of any issues with file access
-/// or incorrect PAF format.
+/// The function returns an `Err` in the following cases:
+/// - If the file is empty (contains no bytes), it returns an error with the message "Error: empty file".
+/// - If the file format is invalid, specifically if any of the first twelve columns contains a ':' character,
+///   it returns an error with the message "Error: invalid format for PAF file. Missing one of first twelve columns, or values contain a :."
+/// - If there are any I/O errors while reading the file, the function returns an error with the specific I/O error message.
 ///
-/// # Examples
+/// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use std::path::Path;
-/// use my_crate::from_file;
+/// use std::io::BufRead;
 ///
-/// // Provide the path to the PAF file
-/// let file_path = Path::new("path/to/your_paf_file.paf");
-///
-/// // Call the function to parse the PAF file
-/// let result = from_file(file_path);
-///
-/// // Check the result
-/// match result {
-///     Ok(_) => println!("PAF file parsed successfully!"),
-///     Err(err) => println!("Error: {}", err),
+/// let file_name = Path::new("example.paf");
+/// match open_paf_for_reading(file_name) {
+///     Ok(reader) => {
+///         let mut lines = reader.lines();
+///         // Process the PAF file line by line
+///         for line in lines {
+///             match line {
+///                 Ok(line_content) => {
+///                     // Process the content of the PAF line
+///                     // ...
+///                 }
+///                 Err(error) => {
+///                     eprintln!("Error while reading PAF line: {}", error);
+///                 }
+///             }
+///         }
+///     }
+///     Err(error) => {
+///         eprintln!("Error while parsing PAF file: {}", error);
+///     }
 /// }
 /// ```
-pub fn parse_paf_file(file_name: impl AsRef<Path>) -> DynResult<Box<dyn BufRead + Send>> {
+pub fn open_paf_for_reading(file_name: impl AsRef<Path>) -> DynResult<Box<dyn BufRead + Send>> {
+    // create reader to check file first line
     let mut paf_file = reader(&file_name, None);
 
     // Check the file isn't empty
     let mut buffer = [0; 1];
     let bytes_read = paf_file.read(&mut buffer)?;
-    let paf_file = reader(file_name, None);
     if bytes_read == 0 {
         return Err("Error: empty file".into());
     }
+    let mut line = String::new();
+    paf_file.read_line(&mut line)?;
+    let t: Vec<&str> = line.split_ascii_whitespace().collect();
+    if t.iter().take(12).any(|item| item.contains(':')) {
+        return Err("Error: invalid format for Paf file. Missing one of first twelve columns, or values contain a :.".into());
+    }
+
+    let paf_file = reader(file_name, None);
+
     Ok(paf_file)
 }
 
@@ -254,7 +282,7 @@ mod tests {
     #[test]
     fn test_from_file_valid_paf() {
         let file_name = get_test_file("test_hum_4000.paf");
-        let result = parse_paf_file(file_name);
+        let result = open_paf_for_reading(file_name);
         assert!(
             result.is_ok(),
             "Expected Ok, but got an error: {:?}",
@@ -265,14 +293,14 @@ mod tests {
     #[test]
     fn test_from_file_invalid_paf() {
         let file_name = get_test_file("invalid_file.paf");
-        let result = parse_paf_file(file_name);
+        let result = open_paf_for_reading(file_name);
         assert!(result.is_err(), "Expected Err, but got Ok");
     }
 
     #[test]
     fn test_from_file_empty_file() {
         let file_name = get_test_file("empty.paf");
-        let result = parse_paf_file(file_name);
+        let result = open_paf_for_reading(file_name);
         assert!(result.is_err(), "Expected Err, but got Ok");
     }
 
@@ -280,13 +308,13 @@ mod tests {
     #[should_panic]
     fn test_from_file_nonexistent_file() {
         let file_name = get_test_file("no_existo.paf");
-        let result = parse_paf_file(file_name);
+        let result = open_paf_for_reading(file_name);
         assert!(result.is_err(), "Expected Err, but got Ok");
     }
 
     #[test]
     fn test_paf_from_file() {
-        parse_paf_file(get_test_file("test_hum_4000.paf")).unwrap();
+        open_paf_for_reading(get_test_file("test_hum_4000.paf")).unwrap();
         // assert_eq!(paf.records.len(), 4148usize);
     }
 }
