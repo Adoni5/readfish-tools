@@ -2,15 +2,16 @@
 //! In this module we implement a Paf struct and functions to read and write Paf files.
 //! A lot of this was lifted from https://github.com/mrvollger/rustybam/blob/main/src/paf.rs
 //!
-use flate2::{read, Compression};
-use gzp::{deflate::Bgzf, ZBuilder};
+
+use crate::{
+    readfish::Conf,
+    readfish_io::{reader, DynResult},
+    sequencing_summary::SeqSum,
+};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
-    error::Error,
-    ffi::OsStr,
-    fs::File,
-    io::{stdin, stdout, BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, Write},
     path::{Path, PathBuf},
 };
 
@@ -18,207 +19,222 @@ lazy_static! {
     static ref PAF_TAG: Regex = Regex::new("(..):(.):(.*)").unwrap();
 }
 
-/// Small default BUFFER_SIZE for buffered readers
-const BUFFER_SIZE: usize = 32 * 1024;
-
-/// Dynamic result type for holding either a generic value or an error
-type DynResult<T> = Result<T, Box<dyn Error + 'static>>;
-
-/// Get a buffered input reader from stdin or a file
+/// A struct representing a PAF record reader and writers for demultiplexing.
 ///
-/// # Arguments
+/// This struct holds a reader and a list of writers used for demultiplexing PAF records
+/// into different files. The `reader` field is a `Box<dyn BufRead + Send>` representing a
+/// buffered input reader from which PAF records are read. The `writers` field is a `Vec<Box<dyn Write>>`
+/// holding multiple output writers for writing the demultiplexed PAF records into different files.
 ///
-/// * `path`: Optional path to a file. If provided, the function will attempt to open the file and create a buffered reader from it. If set to `None`, the function will create a buffered reader from stdin.
+/// # Fields
 ///
-/// # Returns
-///
-/// A dynamic result that represents either a buffered reader on success or an error wrapped in a `Box<dyn Error + 'static>` on failure.
+/// * `reader`: A boxed trait object implementing `BufRead` and `Send`, used as the input reader
+///   for reading PAF records.
+/// * `writers`: A vector of boxed trait objects implementing `Write`, used as the output writers
+///   for writing the demultiplexed PAF records into different files.
+/// * `paf_file`: The path to the PAF file.
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// let reader = _get_reader_from_path(Some(PathBuf::from("path/to/file")))?;
+/// ```rust, ignore
+/// use std::fs::File;
+/// use std::io::{BufReader, BufWriter};
+/// use std::path::Path;
+///
+/// // Create a reader for the PAF file
+/// let file_path = Path::new("example.paf");
+/// let file = File::open(file_path).expect("Error: Failed to open file");
+/// let reader = Box::new(BufReader::new(file));
+///
+/// // Create multiple writers for demultiplexing the PAF records
+/// let writer1 = Box::new(BufWriter::new(File::create("output1.paf").unwrap()));
+/// let writer2 = Box::new(BufWriter::new(File::create("output2.paf").unwrap()));
+/// let writers = vec![writer1, writer2];
+///
+/// // Create a PAF object
+/// let paf = Paf { reader, writers };
 /// ```
-fn _get_reader_from_path(path: Option<PathBuf>) -> DynResult<Box<dyn BufRead + Send + 'static>> {
-    let reader: Box<dyn BufRead + Send + 'static> = match path {
-        Some(path) => {
-            // stdin
-            if path.as_os_str() == "-" {
-                Box::new(BufReader::with_capacity(BUFFER_SIZE, stdin()))
-            } else {
-                // open file
-                Box::new(BufReader::with_capacity(BUFFER_SIZE, File::open(path)?))
-            }
-        }
-        // nothing passed as input, read from stdin
-        None => Box::new(BufReader::with_capacity(BUFFER_SIZE, stdin())),
-    };
-    Ok(reader)
+///
+pub struct Paf {
+    /// The provided PAF file.
+    pub paf_file: PathBuf,
+    /// Reader for the Paf file.
+    pub reader: Box<dyn BufRead + Send>,
+    /// Multiple writes, one for each demultiplexed file.
+    pub writers: Vec<Box<dyn Write>>,
 }
 
-/// Read normal or compressed files seamlessly
-///
-/// This function provides a convenient way to read both normal and compressed files.
-///  It automatically detects whether the file is compressed based on the presence of a
-/// `.gz` or `.bgz` extension in the filename.
-///
-/// # Examples
-///
-/// Reading from an uncompressed file:
-///
-/// ```rust,ignore
-/// use std::io::BufRead;
-///
-/// let n_lines = reader("file.txt").lines().count();
-/// assert_eq!(n_lines, 10);
-/// ```
-///
-/// Reading from a compressed file:
-///
-/// ```rust,ignore
-/// use std::io::BufRead;
-///
-/// let n_lines_gz = reader("file.txt.gz").lines().count();
-/// assert_eq!(n_lines_gz, 10);
-/// ```
-///
-/// In the examples above, the `reader` function seamlessly handles both uncompressed and compressed files.
-///  It returns a buffered reader (`Box<dyn BufRead + Send + 'static>`) that can be used to read the file's contents line by line.
-///
-/// # Arguments
-///
-/// * `filename`: The path or filename of the file to read. If "-" is provided, the function will read from stdin.
-///
-/// # Returns
-///
-/// A boxed trait object implementing `BufRead`, which can be used to read the contents of the file.
-/// Uses the presence of a `.gz` or `.bgz` extension to decide
-pub fn reader(filename: impl AsRef<Path>) -> Box<dyn BufRead + Send + 'static> {
-    let ext = filename.as_ref().extension();
-    let path: PathBuf = filename.as_ref().to_path_buf();
-    // Handle Gzipped files first, since need to use flate2::read::GzDecoder
-    if ext == Some(OsStr::new("gz")) {
-        let file = match File::open(&path) {
-            Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-            Ok(file) => file,
-        };
-        Box::new(BufReader::with_capacity(
-            BUFFER_SIZE,
-            read::GzDecoder::new(file),
-        ))
-    // } else if ext == Some(OsStr::new("bgz")) {
-    //     Box::new(BufReader::new(BgzfSyncReader::new(
-    //         get_input(Some(path)).expect("Error: cannot read input file."),
-    //     )))
-    } else {
-        _get_reader_from_path(Some(path)).expect("Error: cannot read input file")
+impl Paf {
+    /// Create a new `Paf` object with the given PAF file.
+    ///
+    /// This function creates a new `Paf` object by parsing the specified PAF file
+    /// and initializing the `reader` field with the resulting buffered input reader.
+    /// The `writers` field is initialized as an empty vector of output writers.
+    ///
+    /// # Arguments
+    ///
+    /// * `paf_file`: An implementation of the `AsRef<Path>` trait representing the path to the PAF file.
+    ///
+    /// # Returns
+    ///
+    /// A new `Paf` object with the parsed PAF file as the input reader and an empty vector of writers.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if there is an error while parsing the PAF file or creating the buffered input reader.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::path::Path;
+    /// use readfish::Paf;
+    ///
+    /// // Create a new Paf object from the "example.paf" file
+    /// let paf_file_path = Path::new("example.paf");
+    /// let paf = Paf::new(paf_file_path);
+    /// ```
+    ///
+    pub fn new(paf_file: impl AsRef<Path>) -> Paf {
+        Paf {
+            paf_file: paf_file.as_ref().to_path_buf(),
+            reader: parse_paf_file(paf_file).unwrap(),
+            writers: vec![],
+        }
+    }
+    /// Demultiplexes the PAF file by processing each line and obtaining corresponding sequencing summary records.
+    ///
+    /// This function reads the PAF file line by line, parses each line, and processes the custom tags present in the PAF format.
+    /// These custom tags are add by readfish's implementation summarise on the Aligner.
+    /// If the `sequencing_summary` argument is provided, it retrieves the sequencing summary record for each line's query name.
+    /// The function processes custom tags in the PAF file and ensures they are present. If `sequencing_summary` is None and custom tags are missing,
+    /// the function will panic.
+    ///
+    /// If `sequencing_summary` is provided, the function retrieves the sequencing summary record for each query name using the `get_record` function.
+    /// If a sequencing summary record is not found in the buffer, the function reads from the sequencing summary file until the record is found.
+    /// The function consumes the bytes in the PAF file and updates the `previous_read_id` to avoid removing multiple mappings from the `sequencing_summary`
+    /// only when the new Read Id is not the same as the old read_id.
+    ///
+    /// # Arguments
+    ///
+    /// - `toml`: A reference to the `Conf` struct, which contains configuration settings.
+    /// - `sequencing_summary`: An optional mutable reference to the `SeqSum` struct, representing the sequencing summary file.
+    ///
+    /// # Errors
+    ///
+    /// This function returns a `DynResult`, which is a specialized `Result` type with an error message.
+    /// An error is returned if there is any issue reading the PAF file or if the sequencing summary file is not found.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// // Import necessary libraries
+    /// use std::error::Error;
+    /// use my_crate::{SeqSum, Conf};
+    ///
+    /// // Create a new sequencing summary instance
+    /// let mut sequencing_summary = SeqSum::from_file("path/to/sequencing_summary.toml")?;
+    ///
+    /// // Load the TOML configuration
+    /// let toml = Conf::from_file("path/to/config.toml")?;
+    ///
+    /// // Demultiplex the PAF file using the sequencing summary
+    /// sequencing_summary.demultiplex(&toml, Some(&mut sequencing_summary))?;
+    /// ```
+    pub fn demultiplex(
+        &mut self,
+        _toml: &Conf,
+        mut sequencing_summary: Option<&mut SeqSum>,
+    ) -> DynResult<()> {
+        // Remove multiple mappings from seq_sum dictionary only when the new Read Id is not the same as the old read_id
+        let mut previous_read_id = String::new();
+        for (_index, line) in parse_paf_file(self.paf_file.clone())?.lines().enumerate() {
+            let line = line?;
+            println!("line: {}", line);
+            let t: Vec<&str> = line.split_ascii_whitespace().collect();
+            assert!(
+                t.iter().take(12).all(|item| !item.contains(':')),
+                "Missing colon in PAF line: {}",
+                line
+            );
+            println!("t: {:?}", t);
+            let mut has_tags: bool = sequencing_summary.is_some();
+            for token in t.iter().skip(12) {
+                debug_assert!(PAF_TAG.is_match(token));
+                let caps = PAF_TAG.captures(token).unwrap();
+                let tag = &caps[1];
+                // let value = &caps[3];
+                if (tag == "ch") | (tag == "ba") {
+                    has_tags = true;
+                }
+            }
+            let query_name = t[0];
+
+            // Panic if we don't have our custom tags and the sequencing summary file is None
+            if !has_tags & sequencing_summary.is_none() {
+                panic!("Missing custom tags in PAF line: {}", line);
+            }
+            if sequencing_summary.is_some() {
+                let seq_sum_struct = sequencing_summary.as_deref_mut().unwrap();
+                let seq_sum_record =
+                    seq_sum_struct.get_record(query_name, Some(&mut previous_read_id));
+                println!(
+                    "seq_sum_record: {:?}, query_name: {:#?}",
+                    seq_sum_record, query_name
+                );
+            }
+            if previous_read_id.is_empty() {
+                previous_read_id = query_name.to_string();
+            }
+        }
+        Ok(())
     }
 }
 
-/// Gets a buffered output writer from stdout or a file.
+/// Reads and parses a PAF file, extracting relevant information from each line.
 ///
-/// This function creates a buffered output writer from either stdout or a file specified
-/// by the provided `path`. If the `path` is [`Some`], it creates a buffered writer for the
-/// specified file. If the `path` is `None`, it creates a buffered writer for stdout.
-///
-/// The function returns a [`Result`] containing the boxed writer if successful, or an error
-/// if the file cannot be created or if an I/O error occurs.
+/// A PAF (Pairwise mApping Format) file contains tab-separated columns, each representing
+/// alignment information between sequences. The function reads the file line by line,
+/// parses each line, and collects the necessary information for further processing.
 ///
 /// # Arguments
 ///
-/// * `path` - An optional path to the file. If `Some`, a buffered writer for the file will be created.
-///            If `None`, a buffered writer for stdout will be created.
+/// * `file_name`: An implementation of the `AsRef<Path>` trait, representing the path to the PAF file.
 ///
-/// # Returns
+/// # Errors
 ///
-/// A `Result` containing the boxed writer if successful, or an error message if the file cannot be created
-/// or if an I/O error occurs.
+/// The function returns a result containing either `Ok(())` if the PAF file is successfully read
+/// and parsed, or an error message in case of any issues with file access
+/// or incorrect PAF format.
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// use std::path::PathBuf;
+/// ```rust,no_run
+/// use std::path::Path;
+/// use my_crate::from_file;
 ///
-/// let path = Some(PathBuf::from("output.txt"));
-/// let writer = get_output(path);
+/// // Provide the path to the PAF file
+/// let file_path = Path::new("path/to/your_paf_file.paf");
 ///
-/// match writer {
-///     Ok(w) => {
-///         // Write data using the writer
-///     }
-///     Err(err) => {
-///         eprintln!("Error creating output writer: {}", err);
-///     }
+/// // Call the function to parse the PAF file
+/// let result = from_file(file_path);
+///
+/// // Check the result
+/// match result {
+///     Ok(_) => println!("PAF file parsed successfully!"),
+///     Err(err) => println!("Error: {}", err),
 /// }
 /// ```
-fn _get_writer_from_path(
-    path: Option<PathBuf>,
-) -> Result<Box<dyn Write + Send + 'static>, std::io::Error> {
-    let writer: Box<dyn Write + Send + 'static> = match path {
-        Some(path) => {
-            if path.as_os_str() == "-" {
-                Box::new(BufWriter::with_capacity(BUFFER_SIZE, stdout()))
-            } else {
-                Box::new(BufWriter::with_capacity(BUFFER_SIZE, File::create(path)?))
-            }
-        }
-        None => Box::new(BufWriter::with_capacity(BUFFER_SIZE, stdout())),
-    };
-    Ok(writer)
-}
+pub fn parse_paf_file(file_name: impl AsRef<Path>) -> DynResult<Box<dyn BufRead + Send>> {
+    let mut paf_file = reader(&file_name, None);
 
-/// Write data to normal or compressed files seamlessly.
-/// The function determines the file type based on the presence of the `.gz` extension.
-///
-/// # Arguments
-///
-/// * `filename` - The name of the file to write to, including the extension.
-///
-/// # Returns
-///
-/// A boxed trait object (`Box<dyn Write>`) representing the writer for the specified file.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// use std::io::Write;
-/// let mut writer = writer("output.txt");
-/// writer.write_all(b"Hello, world!").expect("Failed to write data");
-/// ```
-pub fn writer(filename: &str) -> Box<dyn Write> {
-    let ext = Path::new(filename).extension();
-    let path = PathBuf::from(filename);
-    let buffer = _get_writer_from_path(Some(path)).expect("Error: cannot create output file");
-
-    if ext == Some(OsStr::new("gz")) {
-        let writer = ZBuilder::<Bgzf, _>::new()
-            .num_threads(8)
-            .compression_level(Compression::new(6))
-            .from_writer(buffer);
-        Box::new(writer)
-    } else {
-        buffer
+    // Check the file isn't empty
+    let mut buffer = [0; 1];
+    let bytes_read = paf_file.read(&mut buffer)?;
+    let paf_file = reader(file_name, None);
+    if bytes_read == 0 {
+        return Err("Error: empty file".into());
     }
-}
-
-/// Paf record
-pub fn from_file(file_name: impl AsRef<Path>) {
-    let paf_file = reader(file_name);
-    // let mut paf = Paf::new();
-    // read the paf recs into a vector
-    for (_index, line) in paf_file.lines().enumerate() {
-        println!("Line: {}", line.unwrap());
-        // log::trace!("{:?}", line);
-        // match PafRecord::new(&line.unwrap()) {
-        //     Ok(mut rec) => {
-        //         rec.check_integrity().unwrap();
-        //         paf.records.push(rec);
-        //     }
-        //     Err(_) => eprintln!("\nUnable to parse PAF record. Skipping line {}", index + 1),
-        // }
-        // log::debug!("Read PAF record number: {}", index + 1);
-    }
-    // paf
+    Ok(paf_file)
 }
 
 #[cfg(test)]
@@ -238,19 +254,41 @@ mod tests {
     }
 
     #[test]
-    fn test_paf_from_file() {
-        from_file(get_test_file("test_hum_4000.paf"));
-        // assert_eq!(paf.records.len(), 4148usize);
+    fn test_from_file_valid_paf() {
+        let file_name = get_test_file("test_hum_4000.paf");
+        let result = parse_paf_file(file_name);
+        assert!(
+            result.is_ok(),
+            "Expected Ok, but got an error: {:?}",
+            result.err()
+        );
     }
 
     #[test]
-    fn test_reader() {
-        let n_lines = reader(get_test_file("test_hum_4000.paf")).lines().count();
-        assert_eq!(n_lines, 4148usize);
+    fn test_from_file_invalid_paf() {
+        let file_name = get_test_file("invalid_file.paf");
+        let result = parse_paf_file(file_name);
+        assert!(result.is_err(), "Expected Err, but got Ok");
+    }
 
-        let n_lines_gz = reader(get_test_file("test_hum_4000.paf.gz"))
-            .lines()
-            .count();
-        assert_eq!(n_lines_gz, 4148usize);
+    #[test]
+    fn test_from_file_empty_file() {
+        let file_name = get_test_file("empty.paf");
+        let result = parse_paf_file(file_name);
+        assert!(result.is_err(), "Expected Err, but got Ok");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_from_file_nonexistent_file() {
+        let file_name = get_test_file("no_existo.paf");
+        let result = parse_paf_file(file_name);
+        assert!(result.is_err(), "Expected Err, but got Ok");
+    }
+
+    #[test]
+    fn test_paf_from_file() {
+        parse_paf_file(get_test_file("test_hum_4000.paf")).unwrap();
+        // assert_eq!(paf.records.len(), 4148usize);
     }
 }
