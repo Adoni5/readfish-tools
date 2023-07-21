@@ -77,7 +77,7 @@ pub struct SeqSum {
 /// let barcode_info = SeqSumInfo::Barcode("barcode01".to_string());
 /// let read_id_info = SeqSumInfo::ReadId("read12345".to_string());
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SeqSumInfo {
     /// Represents a channel with the given usize value.
     Channel(usize),
@@ -149,7 +149,10 @@ impl SeqSum {
             .unwrap()
             .split('\t')
             .position(|column_header| column_header == "channel");
-
+        assert!(
+            read_id_index.is_some() && channel_index.is_some(),
+            "read_id column header not found in sequencing summary. Header row is likely missing from sequencing summary file."
+        );
         let lines_iter = lines.take(100000);
         let processed_lines = LinkedHashMap::from_iter(lines_iter.map(|line| {
             if let Ok(line_content) = line {
@@ -333,21 +336,21 @@ impl SeqSum {
         &mut self,
         query_name: &str,
         previous_read_id: Option<&mut String>,
-    ) -> DynResult<(SeqSumInfo, SeqSumInfo, SeqSumInfo)> {
+    ) -> DynResult<Option<(SeqSumInfo, SeqSumInfo, SeqSumInfo)>> {
         if query_name != previous_read_id.unwrap_or(&mut String::new()) {
-            Ok(self.record_buffer.remove(query_name).unwrap())
-        } else {
             match self.record_buffer.remove(query_name) {
-                Some(record) => Ok(record),
+                Some(record) => Ok(Some(record)),
                 None => {
                     println!("{:?}", self.record_buffer.back());
                     // Assuming multiple mappings are in a block in a PAF file
                     self.roll_along_file(query_name.to_string())?;
                     println!("{:?}", self.record_buffer.back());
                     println!("{query_name}", query_name = query_name);
-                    Ok(self.record_buffer.remove(query_name).unwrap())
+                    Ok(Some(self.record_buffer.remove(query_name).unwrap()))
                 }
             }
+        } else {
+            Ok(self.record_buffer.get(query_name).cloned())
         }
     }
 }
@@ -370,11 +373,11 @@ mod tests {
 
     #[test]
     fn test_seq_sum_from_file() {
-        let seq_sum_file_path = get_test_file("sequencing_summary_PAK09329_1e424e0e.txt");
+        let seq_sum_file_path = get_test_file("seq_sum_PAK09329.txt");
         let seq_sum = SeqSum::from_file(seq_sum_file_path).unwrap();
         assert_eq!(
             seq_sum.sequencing_summary_path,
-            get_test_file("sequencing_summary_PAK09329_1e424e0e.txt")
+            get_test_file("seq_sum_PAK09329.txt")
         );
         assert_eq!(seq_sum.record_buffer.len(), 100000);
         assert!(seq_sum.has_barcode);
