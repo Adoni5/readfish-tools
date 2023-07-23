@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 repository = "https://github.com/adoni5/readfish-tools/"
 keywords = ["genomics", "analysis", "nanopore", "adaptive_sampling"]
+authors = ["Rory Munro <roryjmunro1@gmail.com>"]
+license = "MIT OR BSD 3-Clause License"
+description = "Tools for analysing adaptive sampling data"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -26,3 +29,19 @@ rayon = "1.7.0"
 regex = "1.9.1"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.7.6"
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = ["extension-module"]
+
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units  = 1
+
+[profile.dev]
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 3
