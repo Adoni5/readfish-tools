@@ -87,6 +87,35 @@ pub enum SeqSumInfo {
     ReadId(String),
 }
 
+impl SeqSumInfo {
+    /// Get the channel value if the enum variant is Channel, otherwise return None.
+    pub fn get_channel(&self) -> Option<usize> {
+        if let SeqSumInfo::Channel(channel) = self {
+            Some(*channel)
+        } else {
+            None
+        }
+    }
+
+    /// Get the barcode value if the enum variant is Barcode, otherwise return None.
+    pub fn get_barcode(&self) -> Option<&String> {
+        if let SeqSumInfo::Barcode(barcode) = self {
+            Some(barcode)
+        } else {
+            None
+        }
+    }
+
+    /// Get the read ID value if the enum variant is ReadId, otherwise return None.
+    pub fn get_read_id(&self) -> Option<&String> {
+        if let SeqSumInfo::ReadId(read_id) = self {
+            Some(read_id)
+        } else {
+            None
+        }
+    }
+}
+
 impl SeqSum {
     /// Create a `SeqSum` instance from a sequencing summary file.
     ///
@@ -193,7 +222,6 @@ impl SeqSum {
                 panic!("failed to read sequencing summary line");
             }
         }));
-        println!("{bytes_read}", bytes_read = reader.bytes_read());
 
         Ok(SeqSum {
             sequencing_summary_path,
@@ -280,7 +308,6 @@ impl SeqSum {
                 ),
             );
             if *selected_elements[0] == query_record_read_id {
-                println!("found it");
                 break;
             }
             line.clear();
@@ -335,22 +362,23 @@ impl SeqSum {
     pub fn get_record(
         &mut self,
         query_name: &str,
-        previous_read_id: Option<&mut String>,
-    ) -> DynResult<Option<(SeqSumInfo, SeqSumInfo, SeqSumInfo)>> {
-        if query_name != previous_read_id.unwrap_or(&mut String::new()) {
-            match self.record_buffer.remove(query_name) {
-                Some(record) => Ok(Some(record)),
-                None => {
-                    println!("{:?}", self.record_buffer.back());
-                    // Assuming multiple mappings are in a block in a PAF file
-                    self.roll_along_file(query_name.to_string())?;
-                    println!("{:?}", self.record_buffer.back());
-                    println!("{query_name}", query_name = query_name);
-                    Ok(Some(self.record_buffer.remove(query_name).unwrap()))
-                }
-            }
+        previous_query_name: Option<&str>,
+    ) -> DynResult<(SeqSumInfo, SeqSumInfo, SeqSumInfo)> {
+        if (query_name != previous_query_name.unwrap_or(""))
+            & (!previous_query_name.unwrap_or("").is_empty())
+        {
+            self.record_buffer
+                .remove(previous_query_name.unwrap())
+                .unwrap();
         } else {
-            Ok(self.record_buffer.get(query_name).cloned())
+        }
+        match self.record_buffer.get(query_name) {
+            Some(record) => Ok(record.clone()),
+            None => {
+                // Assuming multiple mappings are in a block in a PAF file
+                self.roll_along_file(query_name.to_string())?;
+                Ok(self.record_buffer.get(query_name).unwrap().clone())
+            }
         }
     }
 }

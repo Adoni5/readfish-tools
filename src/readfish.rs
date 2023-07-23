@@ -18,7 +18,7 @@ use toml::{map::Map, Table, Value};
 /// Action types that can be taken once a decision (one of single_off, single_on, multi_off, multi_on, no_map, no_seq, exceeded_max_chunks, below_min_chunks)
 /// has been made.
 #[derive(Debug, PartialEq)]
-enum Action {
+pub enum Action {
     /// Read would be unblocked
     Unblock,
     /// Complete sequencing naturally
@@ -45,29 +45,138 @@ impl From<&str> for Action {
 /// The _Condition struct holds the settings lifted from the TOML file, for each
 /// region of the flowcell or barcode.
 #[derive(Debug, PartialEq)]
-struct _Condition {
+pub struct _Condition {
     /// The name of the Condition (Barcode/Region).
-    name: String,
+    pub name: String,
     /// Is this Region/Barcode a control region / Barcode
-    control: bool,
+    pub control: bool,
     /// The minimum number of read chunks that have to be captured for a read to be processed. Default if not met is to proceed.
-    min_chunks: u8,
+    pub min_chunks: u8,
     /// The maximum number of read chunks that can be captured for a read. Default if exceed is to unblock.
-    max_chunks: u8,
+    pub max_chunks: u8,
     /// The targets associated with the Condition.
-    targets: Targets,
+    pub targets: Targets,
     /// The action to perform when an alignment returns one single primary mapping, outside of any target regions.
-    single_off: Action,
+    pub single_off: Action,
     /// The action to perform when an alignment returns one single primary mapping, inside of a target regions.
-    single_on: Action,
+    pub single_on: Action,
     /// The action to perform when an alignment returns multiple primary mappings, all outside of any target regions.
-    multi_off: Action,
+    pub multi_off: Action,
     /// The action to perform when an alignment returns multiple primary mappings, at LEAST ONE of which is inside of a target region.
-    multi_on: Action,
+    pub multi_on: Action,
     /// The action to perform when no alignments are returned for this read.
-    no_map: Action,
+    pub no_map: Action,
     /// The action to perform when no sequence is produced for this read sequence.
-    no_seq: Action,
+    pub no_seq: Action,
+}
+
+impl _Condition {
+    /// Getter for the `name` field
+    pub fn get_name(&self) -> &String {
+        &self.name
+    }
+
+    /// Setter for the `name` field
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    /// Getter for the `control` field
+    pub fn is_control(&self) -> bool {
+        self.control
+    }
+
+    /// Setter for the `control` field
+    pub fn set_control(&mut self, control: bool) {
+        self.control = control;
+    }
+
+    /// Getter for the `min_chunks` field
+    pub fn get_min_chunks(&self) -> u8 {
+        self.min_chunks
+    }
+
+    /// Setter for the `min_chunks` field
+    pub fn set_min_chunks(&mut self, min_chunks: u8) {
+        self.min_chunks = min_chunks;
+    }
+
+    /// Getter for the `max_chunks` field
+    pub fn get_max_chunks(&self) -> u8 {
+        self.max_chunks
+    }
+
+    /// Setter for the `max_chunks` field
+    pub fn set_max_chunks(&mut self, max_chunks: u8) {
+        self.max_chunks = max_chunks;
+    }
+
+    /// Getter for the `targets` field
+    pub fn get_targets(&self) -> &Targets {
+        &self.targets
+    }
+
+    /// Setter for the `targets` field
+    pub fn set_targets(&mut self, targets: Targets) {
+        self.targets = targets;
+    }
+
+    /// Getter and Setter for the `single_off` field
+    pub fn get_single_off(&self) -> &Action {
+        &self.single_off
+    }
+
+    /// Set the Action to take when a single primary mapping is found outside of any target regions.
+    pub fn set_single_off(&mut self, single_off: Action) {
+        self.single_off = single_off;
+    }
+
+    /// Getter and Setter for the `single_on` field
+    pub fn get_single_on(&self) -> &Action {
+        &self.single_on
+    }
+
+    /// Set the Action to take when a single primary mapping is found on of any target regions.
+    pub fn set_single_on(&mut self, single_on: Action) {
+        self.single_on = single_on;
+    }
+
+    /// Getter and Setter for the `multi_off` field
+    pub fn get_multi_off(&self) -> &Action {
+        &self.multi_off
+    }
+
+    /// Getter and Setter for the `multi_off` field
+    pub fn set_multi_off(&mut self, multi_off: Action) {
+        self.multi_off = multi_off;
+    }
+
+    /// Getter and Setter for the `multi_on` field
+    pub fn get_multi_on(&self) -> &Action {
+        &self.multi_on
+    }
+    /// Getter and Setter for the `multi_off` field
+    pub fn set_multi_on(&mut self, multi_on: Action) {
+        self.multi_on = multi_on;
+    }
+
+    /// Getter and Setter for the `no_map` field
+    pub fn get_no_map(&self) -> &Action {
+        &self.no_map
+    }
+    /// Getter and Setter for the `multi_off` field
+    pub fn set_no_map(&mut self, no_map: Action) {
+        self.no_map = no_map;
+    }
+
+    /// Getter and Setter for the `no_seq` field
+    pub fn get_no_seq(&self) -> &Action {
+        &self.no_seq
+    }
+    /// Getter and Setter for the `multi_off` field
+    pub fn set_no_seq(&mut self, no_seq: Action) {
+        self.no_seq = no_seq;
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -119,13 +228,17 @@ struct Barcode {
 }
 
 // Define a trait to represent the common behaviour of Region and Barcode
-/// Trait for shared behavour for Barcodes and Regions
-trait Condition {
-    // Add any common methods or behavior for Region or Barcode
+/// Trait for shared behaviour for Barcodes and Regions
+pub trait Condition {
+    // Add any common methods or behaviour for Region or Barcode
     /// Return whether this Condition is a control
     fn control(&self) -> bool;
     /// Implement a method that returns something with the Any trait - which allows downcasting of Barcodes and Regions.
     fn any(&self) -> &dyn Any;
+    /// Get the targets from the condition
+    fn get_targets(&self) -> &Targets;
+    /// get the underlying _Condition struct
+    fn get_condition(&self) -> &_Condition;
 }
 
 impl Condition for Region {
@@ -136,6 +249,14 @@ impl Condition for Region {
     fn any(&self) -> &dyn Any {
         self
     }
+
+    fn get_targets(&self) -> &Targets {
+        &self.condition.targets
+    }
+
+    fn get_condition(&self) -> &_Condition {
+        &self.condition
+    }
 }
 
 impl Condition for Barcode {
@@ -144,6 +265,12 @@ impl Condition for Barcode {
     }
     fn any(&self) -> &dyn Any {
         self
+    }
+    fn get_targets(&self) -> &Targets {
+        &self.condition.targets
+    }
+    fn get_condition(&self) -> &_Condition {
+        &self.condition
     }
 }
 
@@ -427,7 +554,7 @@ pub struct Conf {
 }
 #[derive(Debug, PartialEq)]
 /// Holds the targets for a given region or barcode.
-struct Targets {
+pub struct Targets {
     /// The target string as listed in the Toml. Can either be an array of strings, in which case that is assumed to be the targets themselves, or a string,
     /// which is assumed to be a file path to a file containing the targets.
     value: TargetType,
@@ -626,7 +753,7 @@ impl Targets {
                     .flexible(true)
                     .has_headers(false)
                     .from_path(file_path)
-                    .unwrap();
+                    .expect("Could not open targets file!");
                 for record in rdr.records() {
                     let record = record.unwrap();
                     let record: CsvRecord = match bed_file {
@@ -770,7 +897,7 @@ impl Targets {
     ///
     /// assert!(is_within_interval);
     /// ```
-    fn get_coords<T: ToString>(&self, contig: &str, strand: T, coord: usize) -> bool {
+    fn check_coords<T: ToString>(&self, contig: &str, strand: T, coord: usize) -> bool {
         let strand: Strand = strand.to_string().as_str().into();
         let intervals = self
             ._targets
@@ -1054,13 +1181,13 @@ impl Conf {
     ///
     /// This function will return an error if both the region (channel) and barcode were not found in the configuration.
     ///
-    fn get_conditions(
+    pub fn get_conditions<T: AsRef<str> + std::fmt::Debug>(
         &self,
         channel: usize,
-        barcode: Option<&str>,
+        barcode: Option<T>,
     ) -> Result<(bool, &dyn Condition), String> {
         let region_ = self.get_region(channel);
-        let barcode_ = self.get_barcode(barcode);
+        let barcode_ = self.get_barcode(barcode.as_ref());
 
         if let (Some(region), Some(barcode)) = (region_, barcode_) {
             let control = region.control() || barcode.control();
@@ -1103,11 +1230,11 @@ impl Conf {
     /// Returns:
     /// - Returns an [`Option`] containing a reference to the [`Barcode`] if a barcode exists for the given name,
     ///   otherwise returns [`None`]. If the `barcode` parameter is [`None`], function returns [`None`].
-    fn get_barcode(&self, barcode: Option<&str>) -> Option<&Barcode> {
+    fn get_barcode<T: AsRef<str>>(&self, barcode: Option<T>) -> Option<&Barcode> {
         if let Some(barcode_name) = barcode {
             if !self.barcodes.is_empty() {
                 self.barcodes
-                    .get(barcode_name)
+                    .get(barcode_name.as_ref())
                     .or_else(|| self.barcodes.get("classified"))
             } else {
                 None
@@ -1116,17 +1243,70 @@ impl Conf {
             None
         }
     }
-}
-// Formats the sum of two numbers as string.
-// #[pyfunction]
-// fn sum_as_string(bam_path: String, toml_path: String) -> PyResult<String> {}
+    /// Get the targets associated with a specific channel and barcode (if provided) from the configuration.
+    ///
+    /// This function looks up the given `channel` and `barcode` (optional) in the configuration and returns the corresponding targets.
+    /// If the combination of `channel` and `barcode` is not found in the configuration, or if the condition associated with the
+    /// combination does not have targets, this function will return a reference to the default targets.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel`: The channel number for the result.
+    /// * `barcode`: The optional barcode classification from basecalling. If `Some`, it will be override the `channel` to find the targets.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the `Targets` associated with the given `channel` and `barcode` combination.
+    /// If the combination is not found, the function returns a reference to the default targets.
+    fn get_targets(&self, channel: usize, barcode: Option<&str>) -> &Targets {
+        let (_control, condition) = self.get_conditions(channel, barcode).unwrap();
+        condition.get_targets()
+    }
 
-// /// A Python module implemented in Rust.
-// #[pymodule]
-// fn readfish_tools(_py: Python, m: &PyModule) -> PyResult<()> {
-//     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
-//     Ok(())
-// }
+    /// Make a decision based on the provided inputs for the specified channel and barcode (if provided).
+    /// Todo: Write unit tests/integration tests for this function.
+    /// This function takes several parameters, including `channel`, `barcode`, `contig`, `strand`, and `coord`,
+    /// and determines whether the given coordinates are considered "on target" or not based on the configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel`: The channel number associated with the decision-making process.
+    /// * `barcode`: The optional barcode classification from basecalling. If `Some`, it will be used along with the `channel` to find the relevant targets.
+    /// * `contig`: The name of the contig where the coordinates are located.
+    /// * `strand`: The strand information. This can be any type that implements the `ToString` trait, such as a `String` or `&str`.
+    /// * `coord`: The coordinate position to check against the targets.
+    ///
+    /// # Returns
+    ///
+    /// A boolean value indicating whether the given `contig`, `strand`, and `coord` are considered "on target" or not based on the configuration.
+    /// If the combination of `channel` and `barcode` is not found in the configuration, the function will use the default targets.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use your_crate::YourConfStruct;
+    /// # let conf = YourConfStruct::new(); // Assume you have your configuration instance.
+    /// let channel = 1;
+    /// let barcode = Some("barcode01");
+    /// let contig = "chr1";
+    /// let strand = "+";
+    /// let coord = 1000;
+    ///
+    /// let decision = conf.make_decision(channel, barcode, contig, strand, coord);
+    /// println!("Decision: {}", decision);
+    /// ```
+    pub fn make_decision<T: ToString>(
+        &self,
+        channel: usize,
+        barcode: Option<&str>,
+        contig: &str,
+        strand: T,
+        coord: usize,
+    ) -> bool {
+        let targets = self.get_targets(channel, barcode);
+        targets.check_coords(contig, strand, coord)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1290,7 +1470,7 @@ mod tests {
     fn test_get_conditions() {
         let test_toml = test_toml_string();
         let conf = Conf::from_string(test_toml);
-        let (_control, x) = conf.get_conditions(10, None).unwrap();
+        let (_control, x) = conf.get_conditions::<String>(10, None).unwrap();
         // Convert the `Box<dyn Condition>` back into a `Region` if it is one
         if let Some(region) = x.any().downcast_ref::<Region>() {
             // Use the `Region` here
@@ -1506,13 +1686,13 @@ mod tests {
                 .unwrap(),
             &vec![(10, 30)]
         );
-        assert!(targets.get_coords("chr1", Strand::Forward, 15));
-        assert!(targets.get_coords("chr1", "+", 15));
-        assert!(targets.get_coords("chr1", 1, 15));
-        assert!(!targets.get_coords("chr1", 1, 40));
-        assert!(!targets.get_coords("chr2", 1, 40));
-        assert!(!targets.get_coords("chr1", "-", 15));
-        assert!(!targets.get_coords("chr1", -1, 15));
+        assert!(targets.check_coords("chr1", Strand::Forward, 15));
+        assert!(targets.check_coords("chr1", "+", 15));
+        assert!(targets.check_coords("chr1", 1, 15));
+        assert!(!targets.check_coords("chr1", 1, 40));
+        assert!(!targets.check_coords("chr2", 1, 40));
+        assert!(!targets.check_coords("chr1", "-", 15));
+        assert!(!targets.check_coords("chr1", -1, 15));
     }
 
     #[test]
@@ -1527,13 +1707,13 @@ mod tests {
                 .unwrap(),
             &vec![(0_usize, usize::MAX)]
         );
-        assert!(targets.get_coords("chr1", Strand::Forward, 15));
-        assert!(targets.get_coords("chr1", "+", 15));
-        assert!(targets.get_coords("chr1", 1, 15));
-        assert!(targets.get_coords("chr1", 1, 40));
-        assert!(!targets.get_coords("chr2", 1, 40));
-        assert!(targets.get_coords("chr1", "-", 15));
-        assert!(targets.get_coords("chr1", -1, 15));
+        assert!(targets.check_coords("chr1", Strand::Forward, 15));
+        assert!(targets.check_coords("chr1", "+", 15));
+        assert!(targets.check_coords("chr1", 1, 15));
+        assert!(targets.check_coords("chr1", 1, 40));
+        assert!(!targets.check_coords("chr2", 1, 40));
+        assert!(targets.check_coords("chr1", "-", 15));
+        assert!(targets.check_coords("chr1", -1, 15));
     }
 
     #[test]

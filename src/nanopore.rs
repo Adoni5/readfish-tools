@@ -228,11 +228,56 @@ pub fn generate_flowcell(
     split_flowcell
 }
 
+/// Formats a given number of bases into a human-readable string with appropriate units (Kb, Mb, Gb, etc.).
+///
+/// # Arguments
+///
+/// * `number` - The number of bases to be formatted.
+///
+/// # Returns
+///
+/// A string representing the formatted number of bases with the appropriate unit.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// assert_eq!(format_bases(1_000), "1.00 Kb");
+/// assert_eq!(format_bases(1_000_000), "1.00 Mb");
+/// assert_eq!(format_bases(1_630_000), "1.63 Mb");
+/// assert_eq!(format_bases(1_000_000_000), "1.00 Gb");
+/// ```
+pub fn format_bases(number: usize) -> String {
+    let number = number as f64;
+    let units = ["", "K", "M", "G", "T", "P", "E", "Z", "Y"];
+    let base = 1000.0;
+
+    if number.abs() < base {
+        return format!("{} b", number);
+    }
+
+    let exponent = (number.abs().log(base)).floor() as i32;
+    let unit_idx = if exponent >= 0 {
+        std::cmp::min(exponent as usize, units.len() - 1)
+    } else {
+        std::cmp::max(exponent as usize + units.len(), 0)
+    };
+
+    let formatted_number = number / base.powi(exponent);
+    format!("{:.2} {}b", formatted_number, units[unit_idx])
+}
+
 // Tests
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_format_bases() {
+        assert_eq!(format_bases(1_000), "1.00 Kb");
+        assert_eq!(format_bases(1_000_000), "1.00 Mb");
+        assert_eq!(format_bases(1_630_000), "1.63 Mb");
+        assert_eq!(format_bases(1_000_000_000), "1.00 Gb");
+    }
     #[test]
     fn test_generate_flowcell() {
         let x = generate_flowcell(512, 2, 1, false);

@@ -7,6 +7,7 @@ use crate::{
     readfish::Conf,
     readfish_io::{reader, DynResult},
     sequencing_summary::SeqSum,
+    Summary,
 };
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -17,6 +18,108 @@ use std::{
 
 lazy_static! {
     static ref PAF_TAG: Regex = Regex::new("(..):(.):(.*)").unwrap();
+}
+
+/// Store a PafRecord for quick unpacking to update the summary
+#[derive(Debug, Clone)]
+pub struct PafRecord {
+    /// The name of the query sequence (read).
+    pub query_name: String,
+    /// The length of the query sequence (read).
+    pub query_length: usize,
+    /// The start position of the alignment on the query sequence (read).
+    pub query_start: usize,
+    /// The end position of the alignment on the query sequence (read).
+    pub query_end: usize,
+    /// The strand of the alignment ('+' or '-').
+    pub strand: char,
+    /// The name of the target sequence (reference).
+    pub target_name: String,
+    /// The length of the target sequence (reference).
+    pub target_length: usize,
+    /// The start position of the alignment on the target sequence (reference).
+    pub target_start: usize,
+    /// The end position of the alignment on the target sequence (reference).
+    pub target_end: usize,
+    /// The number of matching bases in the alignment.
+    pub nmatch: usize,
+    /// The total length of the alignment.
+    pub aln_len: usize,
+    /// The mapping quality of the alignment.
+    pub mapq: usize,
+    // pub cigar: CigarString,
+    // A vector of additional tags associated with the alignment.
+    // pub tags: Vec<String>,
+    // pub tpos_aln: Vec<u64>,
+    // pub qpos_aln: Vec<u64>,
+    // pub long_cigar: CigarString,
+    // pub id: String,
+    // pub order: u64,
+    // pub contained: bool,
+}
+/// Errors that can occur while parsing PAF (Pairwise mApping Format) files.
+#[derive(Debug)]
+pub enum Error {
+    /// An error occurred while parsing the CIGAR string in the PAF record.
+    PafParseCigar {
+        /// The error message.
+        msg: String,
+    },
+    /// An error occurred while parsing the CS (Coordinate System) tag in the PAF record.
+    PafParseCS {
+        /// The error message.
+        msg: String,
+    },
+    /// An error occurred while parsing an integer value in the PAF record.
+    ParseIntError {
+        /// The error message.
+        msg: String,
+    },
+    /// An error occurred while parsing a column in the PAF record.
+    ParsePafColumn {},
+}
+
+/// A type alias for a Result with the error type specialized to `crate::paf::Error`.
+type PafResult<T> = Result<T, crate::paf::Error>;
+
+impl PafRecord {
+    /// New paf record
+    pub fn new(t: Vec<&str>) -> PafResult<PafRecord> {
+        // make the record
+        let rec = PafRecord {
+            query_name: t[0].to_string(),
+            query_length: t[1]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            query_start: t[2]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            query_end: t[3]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            strand: t[4].parse::<char>().map_err(|_| Error::ParsePafColumn {})?,
+            target_name: t[5].to_string(),
+            target_length: t[6]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            target_start: t[7]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            target_end: t[8]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            nmatch: t[9]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            aln_len: t[10]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+            mapq: t[11]
+                .parse::<usize>()
+                .map_err(|_| Error::ParsePafColumn {})?,
+        };
+        Ok(rec)
+    }
 }
 
 /// A struct representing a PAF record reader and writers for demultiplexing.
@@ -144,48 +247,82 @@ impl Paf {
         &mut self,
         _toml: &Conf,
         mut sequencing_summary: Option<&mut SeqSum>,
+        mut summary: Option<&mut Summary>,
     ) -> DynResult<()> {
         // Remove multiple mappings from seq_sum dictionary only when the new Read Id is not the same as the old read_id
         let mut previous_read_id = String::new();
-        for (_index, line) in open_paf_for_reading(self.paf_file.clone())?
-            .lines()
-            .enumerate()
-        {
+        for line in open_paf_for_reading(self.paf_file.clone())?.lines() {
             let line = line?;
-            println!("line: {}", line);
             let t: Vec<&str> = line.split_ascii_whitespace().collect();
+            // Todo do without clone
+            let paf_record = PafRecord::new(t.clone()).unwrap();
+            // Check first 12 columns for missing items, assumes tags will have been brought forwards
             assert!(
                 t.iter().take(12).all(|item| !item.contains(':')),
                 "Missing colon in PAF line: {}",
                 line
             );
-            println!("t: {:?}", t);
-            let mut has_tags: bool = sequencing_summary.is_some();
-            for token in t.iter().skip(12) {
-                debug_assert!(PAF_TAG.is_match(token));
-                let caps = PAF_TAG.captures(token).unwrap();
-                let tag = &caps[1];
-                // let value = &caps[3];
-                if (tag == "ch") | (tag == "ba") {
-                    has_tags = true;
-                }
-            }
+            // check if we have custom tags from readfish aligner analyse
+            let has_tags: bool = sequencing_summary.is_some();
+            let channel: usize;
+            let barcode: Option<String>;
+            // for token in t.iter().skip(12) {
+            //     debug_assert!(PAF_TAG.is_match(token));
+            //     let caps = PAF_TAG.captures(token).unwrap();
+            //     let tag = &caps[1];
+            //     // let value = &caps[3];
+            //     if (tag == "ch") | (tag == "ba") {
+            //         has_tags = true;
+            //     }
+            // }
+            // Break the Paf line into its components
             let query_name = t[0];
+            // let query_length: usize = t[1].parse()?;
+            let strand = t[4];
+            let contig = t[5];
+            // let contig_length: usize = t[6].parse()?;
+            let mapping_start: usize = t[7].parse()?;
+            let read_on: bool;
 
             // Panic if we don't have our custom tags and the sequencing summary file is None
             if !has_tags & sequencing_summary.is_none() {
                 panic!("Missing custom tags in PAF line: {}", line);
             }
+            // If sequencing summary is provided, get the sequencing summary record for the query name
+            // Use it for things like barcodes and channels
             if sequencing_summary.is_some() {
                 let seq_sum_struct = sequencing_summary.as_deref_mut().unwrap();
-                let seq_sum_record =
-                    seq_sum_struct.get_record(query_name, Some(&mut previous_read_id));
-                println!(
-                    "seq_sum_record: {:?}, query_name: {:#?}",
-                    seq_sum_record, query_name
-                );
+                let seq_sum_record = seq_sum_struct.get_record(query_name, Some(&previous_read_id));
+                if let Ok(record) = seq_sum_record {
+                    read_on = _toml.make_decision(
+                        record.1.get_channel().unwrap(),
+                        record.2.get_barcode().map(|x| x.as_str()),
+                        contig,
+                        strand,
+                        mapping_start,
+                    );
+                    channel = record.1.get_channel().unwrap();
+                    barcode = Some(record.2.get_barcode().unwrap_or(&"".to_string()).clone());
+                } else {
+                    return Err("Error: sequencing summary record not found".into());
+                }
+            } else {
+                read_on = false;
+                channel = 0;
+                barcode = None;
             }
             previous_read_id = query_name.to_string();
+            // get the condition so we can access name etc.
+            let (_control, condition) = _toml.get_conditions(channel, barcode)?;
+            let condition = condition.get_condition();
+            let condition_name = &condition.name;
+            if let Some(summary) = summary.as_deref_mut() {
+                let condition_summary = summary.conditions(condition_name.as_str());
+                condition_summary.update(paf_record, read_on).unwrap();
+                // let _contig_summary = condition_summary.get_or_add_contig(contig, contig_length);/
+
+                // contig.
+            }
         }
         Ok(())
     }
