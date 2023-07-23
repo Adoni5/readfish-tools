@@ -156,6 +156,7 @@ impl SeqSum {
         let mut reader = ByteCounter::new(reader);
         let mut lines: Lines<&mut ByteCounter<Box<dyn BufRead + Send>>> = reader.by_ref().lines();
         let headers = lines.next();
+        // TODO rewrite function to get the index of a column header
         let read_id_index = headers
             .as_ref()
             .unwrap()
@@ -170,7 +171,6 @@ impl SeqSum {
             .unwrap()
             .split('\t')
             .position(|column_header| column_header == "barcode_arrangement");
-
         let channel_index = headers
             .as_ref()
             .unwrap()

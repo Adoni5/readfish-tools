@@ -100,7 +100,7 @@ impl ContigSummary {
 
     /// Mean read length of all reads on the contig.
     pub fn mean_read_length(&self) -> usize {
-        self.length / self.total_reads()
+        self.total_bases / self.total_reads()
     }
     /// On target mean read length of all reads on the contig.
     pub fn on_target_mean_read_length(&self) -> usize {
@@ -515,6 +515,7 @@ pub struct Summary {
 impl fmt::Display for Summary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Summary:")?;
+        // Todo rewrite to use Macro!
         for (condition_name, condition_summary) in &self.conditions {
             let mut condition_table = Table::new();
             condition_table.add_row(row!(bFg->format!("Condition Name: {}", condition_name)));

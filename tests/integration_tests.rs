@@ -7,7 +7,7 @@ mod common;
 fn test_region_based_paf_demultiplex() {
     // using common code.
     let paf = common::get_test_file("test_paf_barcode05_NA12878.chr.paf");
-    let seq_sum = common::get_test_file("sequencing_summary_PAK09329_1e424e0e.txt")
+    let seq_sum = common::get_test_file("seq_sum_PAK09329.txt")
         .as_os_str()
         .to_str()
         .unwrap()
