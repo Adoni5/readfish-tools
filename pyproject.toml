@@ -1,12 +1,35 @@
 [build-system]
-requires = ["maturin>=0.13,<0.14"]
+requires = ["maturin>=0.14"]
 build-backend = "maturin"
 
 [project]
 name = "readfish-tools"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
+version = "0.0.1"
+license = {text = "BSD 3-Clause License"}
+description = "A blazingly fast Python library for reading and summarising readfish output"
+authors = [
+    { name = "Rory Munro",  email = "rory.munro@nottingham.ac.uk"},
+]
+maintainers = [
+    { name = "Rory Munro",  email = "rory.munro@nottingham.ac.uk"},
+]
+homepage = "https://github.com/adoni5/readfish-tools"
+keywords = ["bioinformatics", "python", "rust", "readfish", "analysis"]
+
+[project.optional-dependencies]
+tests = ["pytest"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
