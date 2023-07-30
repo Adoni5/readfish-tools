@@ -28,7 +28,7 @@ homepage = "https://github.com/adoni5/readfish-tools"
 keywords = ["bioinformatics", "python", "rust", "readfish", "analysis"]
 
 [project.optional-dependencies]
-tests = ["pytest"]
+tests = ["pytest", "mappy_rs", "mappy"]
 
 [tool.black]
 line-length = 88
