@@ -266,10 +266,64 @@ pub fn format_bases(number: usize) -> String {
     format!("{:.2} {}b", formatted_number, units[unit_idx])
 }
 
+/// Calculate the running mean incrementally.
+///
+/// Given a mutable reference to `mean`, `count`, and `value`, this function calculates the running
+/// mean by updating the variables in place.
+///
+/// # Arguments
+///
+/// * `mean`: A mutable reference to the current running mean.
+/// * `count`: A mutable reference to the count of elements seen so far.
+/// * `value`: A mutable reference to the new value to be included in the running mean calculation.
+///
+/// # Example
+///
+/// ```
+/// use readfish_tools::nanopore::running_mean;
+/// let mut mean = 0;
+/// let mut count = 0;
+/// let mut value = 5;
+/// running_mean(&mut mean, &mut count, &mut value);
+/// assert_eq!(mean, 5);
+/// assert_eq!(count, 1);
+/// ```
+pub fn running_mean(mean: &mut isize, count: &mut isize, value: &mut isize) {
+    *count += 1;
+    *mean += (*value - *mean) / *count; // Update the running mean incrementally
+}
+
 // Tests
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_running_mean() {
+        let mut mean = 0;
+        let mut count = 0;
+        let mut value = 5;
+
+        running_mean(&mut mean, &mut count, &mut value);
+        assert_eq!(mean, 5);
+        assert_eq!(count, 1);
+
+        // Add more values and update the running mean
+        value = 8;
+        running_mean(&mut mean, &mut count, &mut value);
+        assert_eq!(mean, 6); // (5 + 8) / 2 = 6
+        assert_eq!(count, 2);
+
+        value = 12;
+        running_mean(&mut mean, &mut count, &mut value);
+        assert_eq!(mean, 8); // (5 + 8 + 12) / 3 = 8
+        assert_eq!(count, 3);
+
+        value = 4;
+        running_mean(&mut mean, &mut count, &mut value);
+        assert_eq!(mean, 7); // (5 + 8 + 12 + 4) / 4 = 7
+        assert_eq!(count, 4);
+    }
 
     #[test]
     fn test_format_bases() {

@@ -197,9 +197,9 @@ impl _Condition {
 ///    no_map = "proceed"
 /// ```
 /// All the parsed fields are stored with a _Condition struct, as they could also be from a barcodes table.
-struct Region {
+pub struct Region {
     /// The parsed region settings.
-    condition: _Condition,
+    pub condition: _Condition,
 }
 
 /// Represents a barcode on the sequencing library. This supercedes any regions.
@@ -282,7 +282,7 @@ impl From<&Map<String, Value>> for _Condition {
             name: source.get("name").unwrap().as_str().unwrap().to_string(),
             control: source
                 .get("control")
-                .unwrap_or(&toml::Value::Boolean(true))
+                .unwrap_or(&toml::Value::Boolean(false))
                 .as_bool()
                 .unwrap(),
             min_chunks: source
@@ -773,6 +773,9 @@ impl Targets {
                             &record,
                             record.get_strand().unwrap(),
                         );
+                    } else {
+                        Targets::insert_into_targets(&mut results, &record, Strand::Forward);
+                        Targets::insert_into_targets(&mut results, &record, Strand::Reverse);
                     }
                 }
             }
@@ -1258,7 +1261,7 @@ impl Conf {
     ///
     /// A reference to the `Targets` associated with the given `channel` and `barcode` combination.
     /// If the combination is not found, the function returns a reference to the default targets.
-    fn get_targets(&self, channel: usize, barcode: Option<&str>) -> &Targets {
+    pub fn get_targets(&self, channel: usize, barcode: Option<&str>) -> &Targets {
         let (_control, condition) = self.get_conditions(channel, barcode).unwrap();
         condition.get_targets()
     }

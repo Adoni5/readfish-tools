@@ -12,12 +12,51 @@ use crate::{
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
-    io::{BufRead, Write},
+    io::BufRead,
     path::{Path, PathBuf},
 };
 
 lazy_static! {
     static ref PAF_TAG: Regex = Regex::new("(..):(.):(.*)").unwrap();
+}
+
+/// Store metadata that is provided by a tuple in a call to parse_paf_by_iter in lib.rs.
+/// See also `[sequencing_summary::SeqSumInfo]`.
+#[derive(Debug)]
+pub struct Metadata {
+    /// The identifier for the read.
+    pub read_id: String,
+    /// The channel associated with the read.
+    pub channel: usize,
+    /// An optional barcode associated with the read, if available.
+    pub barcode: Option<String>,
+}
+
+impl From<(String, usize, Option<String>)> for Metadata {
+    fn from(value: (String, usize, Option<String>)) -> Self {
+        Metadata {
+            read_id: value.0,
+            channel: value.1,
+            barcode: value.2,
+        }
+    }
+}
+
+impl Metadata {
+    /// Get the identifier for the read.
+    pub fn read_id(&self) -> &String {
+        &self.read_id
+    }
+
+    /// Get the channel associated with the read.
+    pub fn channel(&self) -> usize {
+        self.channel
+    }
+
+    /// Get the optional barcode associated with the read, if available.
+    pub fn barcode(&self) -> Option<&String> {
+        self.barcode.as_ref()
+    }
 }
 
 /// Store a PafRecord for quick unpacking to update the summary
@@ -163,8 +202,8 @@ pub struct Paf {
     pub paf_file: PathBuf,
     /// Reader for the Paf file.
     pub reader: Box<dyn BufRead + Send>,
-    /// Multiple writes, one for each demultiplexed file.
-    pub writers: Vec<Box<dyn Write>>,
+    // / Multiple writes, one for each demultiplexed file.
+    // pub writers: Vec<Box<dyn Write>>,
 }
 
 impl Paf {
@@ -201,9 +240,10 @@ impl Paf {
         Paf {
             paf_file: paf_file.as_ref().to_path_buf(),
             reader: open_paf_for_reading(paf_file).unwrap(),
-            writers: vec![],
+            // writers: vec![],
         }
     }
+
     /// Demultiplexes the PAF file by processing each line and obtaining corresponding sequencing summary records.
     ///
     /// This function reads the PAF file line by line, parses each line, and processes the custom tags present in the PAF format.
@@ -245,83 +285,20 @@ impl Paf {
     /// ```
     pub fn demultiplex(
         &mut self,
-        _toml: &Conf,
-        mut sequencing_summary: Option<&mut SeqSum>,
+        _toml: &mut Conf,
+        sequencing_summary: Option<&mut SeqSum>,
         mut summary: Option<&mut Summary>,
     ) -> DynResult<()> {
-        // Remove multiple mappings from seq_sum dictionary only when the new Read Id is not the same as the old read_id
-        let mut previous_read_id = String::new();
-        for line in open_paf_for_reading(self.paf_file.clone())?.lines() {
-            let line = line?;
-            let t: Vec<&str> = line.split_ascii_whitespace().collect();
-            // Todo do without clone
-            let paf_record = PafRecord::new(t.clone()).unwrap();
-            // Check first 12 columns for missing items, assumes tags will have been brought forwards
-            assert!(
-                t.iter().take(12).all(|item| !item.contains(':')),
-                "Missing colon in PAF line: {}",
-                line
-            );
-            // check if we have custom tags from readfish aligner analyse
-            let has_tags: bool = sequencing_summary.is_some();
-            let channel: usize;
-            let barcode: Option<String>;
-            // for token in t.iter().skip(12) {
-            //     debug_assert!(PAF_TAG.is_match(token));
-            //     let caps = PAF_TAG.captures(token).unwrap();
-            //     let tag = &caps[1];
-            //     // let value = &caps[3];
-            //     if (tag == "ch") | (tag == "ba") {
-            //         has_tags = true;
-            //     }
-            // }
-            // Break the Paf line into its components
-            let query_name = t[0];
-            // let query_length: usize = t[1].parse()?;
-            let strand = t[4];
-            let contig = t[5];
-            // let contig_length: usize = t[6].parse()?;
-            let mapping_start: usize = t[7].parse()?;
-            let read_on: bool;
+        let seq_sum = sequencing_summary.unwrap();
 
-            // Panic if we don't have our custom tags and the sequencing summary file is None
-            if !has_tags & sequencing_summary.is_none() {
-                panic!("Missing custom tags in PAF line: {}", line);
-            }
-            // If sequencing summary is provided, get the sequencing summary record for the query name
-            // Use it for things like barcodes and channels
-            if sequencing_summary.is_some() {
-                let seq_sum_struct = sequencing_summary.as_deref_mut().unwrap();
-                let seq_sum_record = seq_sum_struct.get_record(query_name, Some(&previous_read_id));
-                if let Ok(record) = seq_sum_record {
-                    read_on = _toml.make_decision(
-                        record.1.get_channel().unwrap(),
-                        record.2.get_barcode().map(|x| x.as_str()),
-                        contig,
-                        strand,
-                        mapping_start,
-                    );
-                    channel = record.1.get_channel().unwrap();
-                    barcode = Some(record.2.get_barcode().unwrap_or(&"".to_string()).clone());
-                } else {
-                    return Err("Error: sequencing summary record not found".into());
-                }
-            } else {
-                read_on = false;
-                channel = 0;
-                barcode = None;
-            }
-            previous_read_id = query_name.to_string();
-            // get the condition so we can access name etc.
-            let (_control, condition) = _toml.get_conditions(channel, barcode)?;
-            let condition = condition.get_condition();
-            let condition_name = &condition.name;
+        // Remove multiple mappings from seq_sum dictionary only when the new Read Id is not the same as the old read_id
+        for line in open_paf_for_reading(self.paf_file.clone())?.lines() {
+            let (paf_record, read_on, condition_name) =
+                _parse_paf_line(line?, _toml, None, Some(seq_sum))?;
+
             if let Some(summary) = summary.as_deref_mut() {
                 let condition_summary = summary.conditions(condition_name.as_str());
                 condition_summary.update(paf_record, read_on).unwrap();
-                // let _contig_summary = condition_summary.get_or_add_contig(contig, contig_length);/
-
-                // contig.
             }
         }
         Ok(())
@@ -400,6 +377,137 @@ pub fn open_paf_for_reading(file_name: impl AsRef<Path>) -> DynResult<Box<dyn Bu
     Ok(paf_file)
 }
 
+/// Parses a line from the PAF file and extracts relevant information.
+///
+/// This function takes a PAF line (as a reference to a string) and attempts to parse it to extract
+/// relevant information, including creating a [`PafRecord`] and making decisions based on the provided
+/// metadata or sequencing summary. It returns a tuple containing the `PafRecord`, a boolean value
+/// indicating if the read is considered "on-target", and the condition name associated with the read.
+///
+/// # Arguments
+///
+/// * `paf_line`: A reference to a string slice representing a line from the PAF file.
+/// * `_toml`: A reference to a `Conf` struct, holding configuration information.
+/// * `meta_data`: An optional mutable reference to a `Metadata` struct containing read metadata.
+/// * `sequencing_summary`: An optional mutable reference to a `SeqSum` struct containing sequencing summary data.
+///
+/// # Returns
+///
+/// A `DynResult` holding a tuple containing the following elements:
+/// * `PafRecord`: The parsed PAF record representing the alignment information.
+/// * `bool`: A boolean value indicating if the read is considered "on-target".
+/// * `&'a String`: A reference to the condition name associated with the read.
+///
+/// # Panics
+///
+/// This function panics if the PAF line contains missing items in the first 12 columns or if both `meta_data`
+/// and `sequencing_summary` are `None`.
+///
+/// # Examples
+///
+/// ```rust, ignore
+/// # use your_crate::{PafRecord, Metadata, SeqSum, _parse_paf_line};
+///
+/// // Assuming we have valid inputs
+/// let paf_line = "read123 200 0 200 + contig123 300 0 300 200 200 50 ch=1";
+/// let _toml = Conf::default();
+/// let mut metadata = Metadata {
+///     read_id: "read123".to_string(),
+///     channel: 1,
+///     barcode: Some("sampleA".to_string()),
+/// };
+/// let mut seq_sum = SeqSum::default();
+///
+/// let result = _parse_paf_line(paf_line, &_toml, Some(&mut metadata), Some(&mut seq_sum));
+///
+/// match result {
+///     Ok((paf_record, read_on, condition_name)) => {
+///         // Do something with the parsed data
+///     }
+///     Err(err) => {
+///         // Handle the error
+///     }
+/// }
+/// ```
+pub fn _parse_paf_line<'a>(
+    paf_line: impl AsRef<str>,
+    _toml: &'a Conf,
+    meta_data: Option<&mut Metadata>,
+    sequencing_summary: Option<&mut SeqSum>,
+) -> DynResult<(PafRecord, bool, &'a String)> {
+    let line = paf_line.as_ref();
+    let t: Vec<&str> = line.split_ascii_whitespace().collect();
+    // Todo do without clone
+    let paf_record = PafRecord::new(t.clone()).unwrap();
+    // Check first 12 columns for missing items, assumes tags will have been brought forwards
+    assert!(
+        t.iter().take(12).all(|item| !item.contains(':')),
+        "Missing colon in PAF line: {}",
+        line
+    );
+    // check if we have custom tags from readfish aligner analyse
+    let channel: usize;
+    let barcode: Option<String>;
+    // for token in t.iter().skip(12) {
+    //     debug_assert!(PAF_TAG.is_match(token));
+    //     let caps = PAF_TAG.captures(token).unwrap();
+    //     let tag = &caps[1];
+    //     // let value = &caps[3];
+    //     if (tag == "ch") | (tag == "ba") {
+    //         has_tags = true;
+    //     }
+    // }
+    // Break the Paf line into its components
+    let query_name = t[0];
+    // let query_length: usize = t[1].parse()?;
+    let strand = t[4];
+    let contig = t[5];
+    // let contig_length: usize = t[6].parse()?;
+    let mapping_start: usize = t[7].parse()?;
+    let read_on: bool;
+    if meta_data.is_none() & sequencing_summary.is_none() {
+        panic!("Cannot parse paf line without provided metdata or sequencing summary_file");
+    }
+    // If sequencing summary is provided, get the sequencing summary record for the query name
+    // Use it for things like barcodes and channels
+    if let Some(seq_sum_struct) = sequencing_summary {
+        let seq_sum_record = seq_sum_struct.get_record(query_name, None);
+        if let Ok(record) = seq_sum_record {
+            read_on = _toml.make_decision(
+                record.1.get_channel().unwrap(),
+                record.2.get_barcode().map(|x| x.as_str()),
+                contig,
+                strand,
+                mapping_start,
+            );
+            channel = record.1.get_channel().unwrap();
+            barcode = Some(record.2.get_barcode().unwrap_or(&"".to_string()).clone());
+        } else {
+            return Err("Error: sequencing summary record not found".into());
+        }
+        seq_sum_struct.previous_read_id = query_name.to_string();
+    // We must have metatdata
+    } else {
+        let metadata = meta_data.unwrap();
+        // println!("{contig}, {strand}, {mapping_start}");
+        read_on = _toml.make_decision(
+            metadata.channel(),
+            metadata.barcode().map(|x| x.as_str()),
+            contig,
+            strand,
+            mapping_start,
+        );
+        channel = metadata.channel();
+        barcode = Some(metadata.barcode().unwrap_or(&"".to_string()).clone());
+    }
+    // get the condition so we can access name etc.
+    let (_control, condition) = _toml.get_conditions(channel, barcode)?;
+    let condition = condition.get_condition();
+    let condition_name = &condition.name;
+
+    Ok((paf_record, read_on, condition_name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,6 +522,70 @@ mod tests {
         let mut path = get_resource_dir();
         path.push(file);
         path
+    }
+
+    #[test]
+    fn test_from_tuple() {
+        let tuple = ("ABC123".to_string(), 1, Some("BCDE".to_string()));
+        let metadata = Metadata::from(tuple);
+
+        assert_eq!(metadata.read_id(), "ABC123");
+        assert_eq!(metadata.channel(), 1);
+        assert_eq!(metadata.barcode(), Some(&"BCDE".to_string()));
+    }
+
+    #[test]
+    fn test_from_tuple_no_barcode() {
+        let tuple = ("XYZ789".to_string(), 2, None);
+        let metadata = Metadata::from(tuple);
+
+        assert_eq!(metadata.read_id(), "XYZ789");
+        assert_eq!(metadata.channel(), 2);
+        assert_eq!(metadata.barcode(), None);
+    }
+
+    #[test]
+    fn test_read_id() {
+        let metadata = Metadata {
+            read_id: "ABC123".to_string(),
+            channel: 1,
+            barcode: None,
+        };
+
+        assert_eq!(metadata.read_id(), "ABC123");
+    }
+
+    #[test]
+    fn test_channel() {
+        let metadata = Metadata {
+            read_id: "ABC123".to_string(),
+            channel: 1,
+            barcode: Some("BCDE".to_string()),
+        };
+
+        assert_eq!(metadata.channel(), 1);
+    }
+
+    #[test]
+    fn test_barcode_present() {
+        let metadata = Metadata {
+            read_id: "ABC123".to_string(),
+            channel: 1,
+            barcode: Some("BCDE".to_string()),
+        };
+
+        assert_eq!(metadata.barcode(), Some(&"BCDE".to_string()));
+    }
+
+    #[test]
+    fn test_barcode_absent() {
+        let metadata = Metadata {
+            read_id: "ABC123".to_string(),
+            channel: 1,
+            barcode: None,
+        };
+
+        assert_eq!(metadata.barcode(), None);
     }
 
     #[test]

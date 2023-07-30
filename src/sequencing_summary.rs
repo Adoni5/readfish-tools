@@ -11,7 +11,7 @@ use linked_hash_map::LinkedHashMap;
 // use rayon::prelude::*;
 use std::io::Lines;
 use std::{
-    io::{BufRead, Read, Write},
+    io::{BufRead, Read},
     path::{Path, PathBuf},
 };
 /// Data structure representing sequencing summary information.
@@ -51,7 +51,7 @@ pub struct SeqSum {
     /// Path to the sequencing summary file.
     pub sequencing_summary_path: PathBuf,
     /// Multiple writes, one for each demultiplexed file.
-    pub writers: Vec<Box<dyn Write>>,
+    // pub writers: Vec<Box<dyn Write>>,
     /// Record buffer for the sequencing summary
     pub record_buffer: LinkedHashMap<String, (SeqSumInfo, SeqSumInfo, SeqSumInfo)>,
     /// Is barcode_arrangement in this sequencing summary file?
@@ -60,6 +60,8 @@ pub struct SeqSum {
     pub current_position: usize,
     /// Column_indices: (read_id, channel, barcode_arrangement)
     pub column_indices: (usize, usize, usize),
+    /// Previous read id. Used to check that we have consumed all of a multiple mapping.
+    pub previous_read_id: String,
 }
 
 /// Enumeration representing sequenced summary information.
@@ -150,7 +152,7 @@ impl SeqSum {
     /// ```
     pub fn from_file(sequencing_summary_path: impl AsRef<Path>) -> DynResult<SeqSum> {
         let sequencing_summary_path = sequencing_summary_path.as_ref().to_path_buf();
-        let writers = vec![];
+        // let writers = vec![];
 
         let reader = reader(&sequencing_summary_path, None);
         let mut reader = ByteCounter::new(reader);
@@ -225,7 +227,7 @@ impl SeqSum {
 
         Ok(SeqSum {
             sequencing_summary_path,
-            writers,
+            // writers,
             record_buffer: processed_lines,
             has_barcode: barcode_index.is_some(),
             current_position: reader.bytes_read(),
@@ -234,6 +236,7 @@ impl SeqSum {
                 channel_index.unwrap(),
                 barcode_index.unwrap_or(usize::MAX),
             ),
+            previous_read_id: String::new(),
         })
     }
     /// Roll along the sequencing summary file until a specific record with the given Read ID is found.
@@ -364,7 +367,7 @@ impl SeqSum {
         query_name: &str,
         previous_query_name: Option<&str>,
     ) -> DynResult<(SeqSumInfo, SeqSumInfo, SeqSumInfo)> {
-        if (query_name != previous_query_name.unwrap_or(""))
+        if (query_name != previous_query_name.unwrap_or(&self.previous_read_id))
             & (!previous_query_name.unwrap_or("").is_empty())
         {
             self.record_buffer
