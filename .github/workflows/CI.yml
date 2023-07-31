@@ -37,25 +37,29 @@ jobs:
 #         name: wheels
 #         path: dist
 
-#   macos:
-#     runs-on: macos-latest
-#     steps:
-#     - uses: actions/checkout@v3
-#     - uses: messense/maturin-action@v1
-#       with:
-#         command: build
-#         args: --release -o dist --universal2 --find-interpreter
-#     - name: Upload wheels
-#       uses: actions/upload-artifact@v2
-#       with:
-#         name: wheels
-#         path: dist
+  macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install aarch64-apple-darwin toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        target: aarch64-apple-darwin
+    - uses: messense/maturin-action@v1
+      with:
+        command: build
+        args: --release -o dist --universal2 --find-interpreter
+    - name: Upload wheels
+      uses: actions/upload-artifact@v2
+      with:
+        name: wheels
+        path: dist
 
   release:
     name: Release
     runs-on: ubuntu-latest
     if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [ macos, windows, linux ]
+    needs: [ macos, linux ]
     steps:
       - uses: actions/download-artifact@v2
         with:
