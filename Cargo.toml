@@ -7,6 +7,7 @@ keywords = ["genomics", "analysis", "nanopore", "adaptive_sampling"]
 authors = ["Rory Munro <roryjmunro1@gmail.com>"]
 license = "MIT OR BSD 3-Clause License"
 description = "Tools for analysing adaptive sampling data"
+exclude = ["resources/*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
