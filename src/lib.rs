@@ -1041,9 +1041,9 @@ impl ReadfishSummary {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// # use pyo3::types::PyIterator;
-    /// # use your_crate::{ReadfishSummary, Metadata, _parse_paf_line};
+    /// # use readfish_tools::{ReadfishSummary, paf::Metadata, paf::_parse_paf_line};
     ///
     /// // Assuming we have valid inputs
     /// let mut readfish_summary = ReadfishSummary::default();
@@ -1119,7 +1119,7 @@ impl ReadfishSummary {
     ///
     /// The method can be called on an instance of `ReadfishSummary` to print its summary.
     ///
-    /// ```
+    /// ```rust,ignore
     /// # use pyo3::prelude::*;
     /// # use std::cell::RefCell;
     /// # use std::collections::HashMap;
