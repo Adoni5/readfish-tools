@@ -5,7 +5,7 @@ edition = "2021"
 repository = "https://github.com/adoni5/readfish-tools/"
 keywords = ["genomics", "analysis", "nanopore", "adaptive_sampling"]
 authors = ["Rory Munro <roryjmunro1@gmail.com>"]
-license = "MIT OR BSD 3-Clause License"
+license = "MPL-2.0 OR GPL-3.0-only"
 description = "Tools for analysing adaptive sampling data"
 exclude = ["resources/*"]
 
