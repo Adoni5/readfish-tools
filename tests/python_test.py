@@ -189,9 +189,9 @@ def test_get_fq(tmpdir):
     assert str(directory.join("sample5.txt")) not in fastq_files
 
 
-# def test_demultiplex_pathlib(toml_file_path, paf_file_path, seq_sum_file_path):
-#     summarise_paf(
-#         toml_file_path,
-#         paf_file_path,
-#         seq_sum_file_path,
-#     )
+def test_demultiplex_pathlib(toml_file_path, paf_file_path, seq_sum_file_path):
+    summarise_paf(
+        toml_file_path,
+        paf_file_path,
+        seq_sum_file_path,
+    )
