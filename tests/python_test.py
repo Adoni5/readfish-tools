@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 import copy
 import re
+from typing import Optional
 
 import pytest
 from mappy import fastx_read
@@ -15,22 +18,32 @@ SEQ_SUM_FILE = RESOURCES / "seq_sum_PAK09329.txt"
 MMI_FILE = "/home/adoni5/Documents/Bioinformatics/refs/hg38_no_alts_22.mmi"
 
 
-def get_fq(directory):
+def get_fq(directory: str | Path):
     """
     Given a directory, return a generator of fastq files.
 
     Parameters:
-        directory (str or Path): The directory path to search for fastq files.
+
+    :param directory (str or Path): The directory path to search for fastq files.
 
     Yields:
-        str: A path to a fastq file found in the given directory or its subdirectories.
 
-    Examples:
-        >>> for file_path in get_fq("resouces"):
-        ...     print(file_path)
+    :yield str: A path to a fastq file found in the given directory or its subdirectories.
+
+    Example:
+    --------
+
+    .. code-block:: python
+
+        for file_path in get_fq("resouces"):
+            print(file_path)
+
+    Output
+    ------
+    .. code-block:: python
+
         /path/to/directory/sample1.fastq
         /path/to/directory/sample2.fastq.gz
-        ...
 
     Note:
         The function searches for files with extensions .fastq, .fastq.gz, .fq, .fq.gz
@@ -85,7 +98,7 @@ def al(mmi_file):
     return mappy_rs.Aligner(mmi_file)
 
 
-def _prep_fastq():
+def _prep_fastq() -> tuple[str, str, int, Optional[str], int]:
     """
     Function extracts key-value pairs
     from the comments present in the fastq files and yields a tuple for each file with the processed sequence,
@@ -134,11 +147,48 @@ def _prep_fastq():
             }
 
 
-def tupleise(input: dict):
+def tupleise(input: dict) -> tuple[str, int, Optional[str]]:
+    """
+
+    Given a dictionary, return a tuple of three elements.
+
+    :param input: A dictionary containing at least the following keys:
+            - ``name`` (str): The name value to be included in the resulting tuple.
+            - ``channel`` (int): The channel value to be included in the resulting tuple.
+            - ``barcode`` (Optional[str]): An optional barcode value to be included in the resulting tuple.
+
+    :returns: tuple[str, int, Optional[str]]: A tuple containing the extracted ``name``, ``channel``, and ``barcode`` values from the input dictionary.
+
+    Example:
+        ::
+
+            input_dict = {"name": "John", "channel": 2, "barcode": "ABC123"}
+            result_tuple = tupleise(input_dict)
+            # Output: ("John", 2, "ABC123")
+
+    """
     return (input["name"], input["channel"], input.get("barcode", None))
 
 
-def yield_alignments(al):
+def yield_alignments(al: mappy_rs.Aligner):
+    """
+    Yield alignments obtained from the given `al` object.
+
+    :param al: An object representing the alignments.
+
+    :yield: A tuple containing the formatted alignment information and metadata. The tuple contains the following elements:
+            - Formatted alignment information (str): A string containing the formatted alignment information.
+            - Metadata (tuple[str, int, Optional[str]]): A tuple containing extracted metadata information from the input.
+
+    :Example:
+
+    .. code-block:: python
+        from mappy_rs import Aligner
+        al = Aligner("MMI FILE PATH")
+        for alignment_info, metadata in yield_alignments(al):
+            print(f"Alignment: {alignment_info}")
+            print(f"Metadata: {metadata}")
+    """
     for mappings, _input in al.map_batch(_prep_fastq()):
         for mapping in mappings:
             metadata = tupleise(_input)
