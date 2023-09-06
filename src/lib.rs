@@ -36,8 +36,11 @@ use std::{
 use itertools::Itertools;
 use nanopore::{format_bases, running_mean};
 use num_format::{Locale, ToFormattedString};
-use paf::{Metadata, Paf, PafRecord, _parse_paf_line};
+#[cfg(feature = "pyo3_support")]
+use paf::{Metadata, _parse_paf_line};
+use paf::{Paf, PafRecord};
 use prettytable::{color, row, Attr, Cell, Row, Table};
+#[cfg(feature = "pyo3_support")]
 use pyo3::{prelude::*, types::PyIterator};
 use readfish::Conf;
 use readfish_io::DynResult;
@@ -866,8 +869,20 @@ pub fn _demultiplex_paf(
 }
 
 // PYTHON PyO3 STuff below ////////////////////////
-
+#[cfg(feature = "pyo3_support")]
 #[pyclass]
+/// Organise the data and methods for analysing a readfish PAF file.
+pub struct ReadfishSummary {
+    /// Stores the aggregated summary numbers for the readfish run
+    summary: RefCell<Summary>,
+    /// The config TOML file for the readfish tun
+    _conf: Option<Conf>,
+    /// The sequencing summary file
+    _sequencing_summary: Option<SeqSum>,
+    /// The PAF file
+    _paf_file: Option<Paf>,
+}
+#[cfg(not(feature = "pyo3_support"))]
 /// Organise the data and methods for analysing a readfish PAF file.
 pub struct ReadfishSummary {
     /// Stores the aggregated summary numbers for the readfish run
@@ -985,6 +1000,7 @@ impl ReadfishSummary {
     }
 }
 
+#[cfg(feature = "pyo3_support")]
 /// Implements methods for interacting with a ReadfishSummary instance from Python.
 #[pymethods]
 impl ReadfishSummary {
@@ -1164,6 +1180,7 @@ impl ReadfishSummary {
     }
 }
 
+#[cfg(feature = "pyo3_support")]
 /// Formats the sum of two numbers as string.
 #[pyfunction]
 fn summarise_from_iter(
@@ -1181,6 +1198,7 @@ fn summarise_from_iter(
     Ok(())
 }
 
+#[cfg(feature = "pyo3_support")]
 /// Summarizes the results of demultiplexing a PAF file using the provided TOML file and
 /// prints the summary to stdout.
 ///
@@ -1209,7 +1227,7 @@ fn summarise_paf(toml_path: PathBuf, paf_path: PathBuf, seq_sum_path: PathBuf) -
     );
     Ok(())
 }
-
+#[cfg(feature = "pyo3_support")]
 /// A Python module implemented in Rust.
 #[pymodule]
 fn readfish_tools(_py: Python, m: &PyModule) -> PyResult<()> {
