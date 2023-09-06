@@ -33,7 +33,7 @@ toml = "0.7.6"
 
 [features]
 extension-module = ["pyo3/extension-module"]
-default = ["extension-module"]
+default = ["extension-module", "pyo3_support"]
 pyo3_support = ["pyo3"]
 
 
