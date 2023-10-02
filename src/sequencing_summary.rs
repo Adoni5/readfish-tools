@@ -373,7 +373,6 @@ impl SeqSum {
             self.record_buffer
                 .remove(previous_query_name.unwrap())
                 .unwrap();
-        } else {
         }
         match self.record_buffer.get(query_name) {
             Some(record) => Ok(record.clone()),
